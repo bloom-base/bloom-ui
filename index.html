@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>bloom-ui</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #fafafa;
+            color: #171717;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            text-align: center;
+            max-width: 480px;
+            padding: 2rem;
+        }
+        h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.75rem;
+        }
+        .description {
+            font-size: 1rem;
+            color: #737373;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            font-size: 0.75rem;
+            color: #a3a3a3;
+            border: 1px solid #e5e5e5;
+            border-radius: 999px;
+            padding: 0.375rem 0.75rem;
+        }
+        .badge svg { width: 14px; height: 14px; }
+        footer {
+            position: fixed;
+            bottom: 1.5rem;
+            font-size: 0.75rem;
+            color: #d4d4d4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>bloom-ui</h1>
+        <p class="description">The public frontend for Bloom — an open source platform where software grows on its own</p>
+        <span class="badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 2a10 10 0 0 1 0 20 10 10 0 0 1 0-20"/>
+                <path d="M2 12h4M18 12h4"/>
+            </svg>
+            Growing on Bloom
+        </span>
+    </div>
+    <footer>Powered by Bloom</footer>
+</body>
+</html>
