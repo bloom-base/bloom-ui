@@ -35,39 +35,39 @@ export function ProjectCard({
   return (
     <Link
       href={href}
-      className="group block p-5 rounded-xl border border-gray-200 bg-white hover:border-gray-300 hover:shadow-md hover:shadow-gray-100 transition-all duration-150"
+      className="group block p-5 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 hover:border-gray-300 dark:hover:border-zinc-600 hover:shadow-md hover:shadow-gray-100 dark:hover:shadow-zinc-900 transition-all duration-150"
     >
       <div className="mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-mono text-gray-400">{org}</span>
+          <span className="text-xs font-mono text-gray-400 dark:text-zinc-500">{org}</span>
           {flagship && (
-            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-violet-50 text-violet-600 border border-violet-100">
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-violet-50 dark:bg-violet-950 text-violet-600 dark:text-violet-400 border border-violet-100 dark:border-violet-800">
               Flagship
             </span>
           )}
         </div>
-        <div className="font-semibold text-gray-900 group-hover:text-gray-700 transition-colors mt-1">{name}</div>
+        <div className="font-semibold text-gray-900 dark:text-zinc-100 group-hover:text-gray-700 dark:group-hover:text-zinc-300 transition-colors mt-1">{name}</div>
       </div>
 
-      <p className="text-sm text-gray-500 mb-4 line-clamp-2 leading-relaxed">{description}</p>
+      <p className="text-sm text-gray-500 dark:text-zinc-400 mb-4 line-clamp-2 leading-relaxed">{description}</p>
 
       <div className="flex items-center gap-3 text-sm">
         <span className="flex items-center gap-1.5">
           <span
             className={`w-2 h-2 rounded-full ${
-              isActive ? 'bg-green-500 shadow-sm shadow-green-200' : 'bg-gray-300'
+              isActive ? 'bg-green-500 shadow-sm shadow-green-200 dark:shadow-green-900' : 'bg-gray-300 dark:bg-zinc-600'
             }`}
           />
-          <span className="text-gray-600">
+          <span className="text-gray-600 dark:text-zinc-400">
             {inProgress > 0 ? `${inProgress} in progress` : 'Idle'}
           </span>
         </span>
         {queued > 0 && (
-          <span className="text-gray-400">&middot; {queued} queued</span>
+          <span className="text-gray-400 dark:text-zinc-500">&middot; {queued} queued</span>
         )}
       </div>
 
-      <div className="flex items-center gap-3 text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100">
+      <div className="flex items-center gap-3 text-xs text-gray-400 dark:text-zinc-500 mt-3 pt-3 border-t border-gray-100 dark:border-zinc-800">
         {completed !== undefined && completed > 0 && (
           <span>{completed} shipped</span>
         )}

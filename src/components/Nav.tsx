@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { getCurrentUser, type UserProfile } from '@/lib/api'
 import { redirectToLogin } from '@/lib/auth'
 import { NotificationBell } from './NotificationBell'
+import ThemeToggle from './ThemeToggle'
 
 export function Nav() {
   const pathname = usePathname()
@@ -52,26 +53,26 @@ export function Nav() {
       aria-label="Main navigation"
       className={`h-14 sticky top-0 z-50 transition-all duration-150 ${
         scrolled || mobileOpen
-          ? 'bg-white/80 backdrop-blur-md border-b border-gray-100'
+          ? 'bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md border-b border-gray-100 dark:border-zinc-800'
           : 'bg-transparent'
       }`}
     >
       <div className="max-w-6xl mx-auto px-6 h-full flex items-center justify-between">
         <Link href="/" className="hover:opacity-70 transition-opacity">
-          <span className="text-lg font-semibold text-gray-900">bloom</span>
+          <span className="text-lg font-semibold text-gray-900 dark:text-zinc-100">bloom</span>
         </Link>
 
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-5">
           <Link
             href="/explore"
-            className={`text-sm transition-colors ${isActive('/explore') ? 'text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-900'}`}
+            className={`text-sm transition-colors ${isActive('/explore') ? 'text-gray-900 dark:text-zinc-100 font-medium' : 'text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100'}`}
           >
             Explore
           </Link>
           <Link
             href="/pricing"
-            className={`text-sm transition-colors ${isActive('/pricing') ? 'text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-900'}`}
+            className={`text-sm transition-colors ${isActive('/pricing') ? 'text-gray-900 dark:text-zinc-100 font-medium' : 'text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100'}`}
           >
             Pricing
           </Link>
@@ -79,7 +80,7 @@ export function Nav() {
             href="https://github.com/bloom-base"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
+            className="text-sm text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100 transition-colors"
           >
             GitHub
           </a>
@@ -87,7 +88,7 @@ export function Nav() {
           {userProfile?.is_admin && (
             <Link
               href="/admin"
-              className={`text-sm transition-colors ${isActive('/admin') ? 'text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-900'}`}
+              className={`text-sm transition-colors ${isActive('/admin') ? 'text-gray-900 dark:text-zinc-100 font-medium' : 'text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100'}`}
             >
               Admin
             </Link>
@@ -96,18 +97,20 @@ export function Nav() {
           {(userProfile?.subscription_tier === 'pro' || userProfile?.subscription_tier === 'enterprise') && (
             <Link
               href="/new"
-              className={`text-sm transition-colors ${isActive('/new') ? 'text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-900'}`}
+              className={`text-sm transition-colors ${isActive('/new') ? 'text-gray-900 dark:text-zinc-100 font-medium' : 'text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100'}`}
             >
               New Project
             </Link>
           )}
+
+          <ThemeToggle />
 
           {user ? (
             <div className="flex items-center gap-3">
               <NotificationBell />
               <Link
                 href="/profile"
-                className={`flex items-center gap-2 text-sm transition-colors ${isActive('/profile') ? 'text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-900'}`}
+                className={`flex items-center gap-2 text-sm transition-colors ${isActive('/profile') ? 'text-gray-900 dark:text-zinc-100 font-medium' : 'text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100'}`}
               >
                 {(user.avatar_url || userProfile?.avatar_url) ? (
                   <img
@@ -119,7 +122,7 @@ export function Nav() {
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                   />
                 ) : (
-                  <span className="w-[22px] h-[22px] rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-medium text-gray-600">
+                  <span className="w-[22px] h-[22px] rounded-full bg-gray-200 dark:bg-zinc-700 flex items-center justify-center text-[10px] font-medium text-gray-600 dark:text-zinc-300">
                     {user.username[0]?.toUpperCase()}
                   </span>
                 )}
@@ -127,7 +130,7 @@ export function Nav() {
               </Link>
               <button
                 onClick={handleSignOut}
-                className="text-sm text-gray-400 hover:text-gray-900 transition-colors"
+                className="text-sm text-gray-400 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-zinc-100 transition-colors"
               >
                 Sign out
               </button>
@@ -136,13 +139,13 @@ export function Nav() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => redirectToLogin()}
-                className="text-sm text-gray-500 hover:text-gray-900 transition-colors"
+                className="text-sm text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100 transition-colors"
               >
                 Sign in
               </button>
               <Link
                 href="/auth/register"
-                className="text-sm px-4 py-1.5 rounded-lg bg-gray-900 text-white hover:bg-gray-800 transition-colors"
+                className="text-sm px-4 py-1.5 rounded-lg bg-gray-900 dark:bg-zinc-100 text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-zinc-200 transition-colors"
               >
                 Get started
               </Link>
@@ -153,9 +156,10 @@ export function Nav() {
         {/* Mobile controls */}
         <div className="md:hidden flex items-center gap-2">
           {user && <NotificationBell />}
+          <ThemeToggle />
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="p-1.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+            className="p-1.5 rounded-lg text-gray-500 dark:text-zinc-400 hover:text-gray-900 dark:hover:text-zinc-100 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
             aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={mobileOpen}
           >
@@ -174,18 +178,18 @@ export function Nav() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden bg-white/95 backdrop-blur-md border-b border-gray-100 px-6 py-4 space-y-3" role="navigation" aria-label="Mobile navigation">
+        <div className="md:hidden bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-b border-gray-100 dark:border-zinc-800 px-6 py-4 space-y-3" role="navigation" aria-label="Mobile navigation">
           <Link
             href="/explore"
             onClick={() => setMobileOpen(false)}
-            className={`block text-sm py-1 ${isActive('/explore') ? 'text-gray-900 font-medium' : 'text-gray-700 hover:text-gray-900'}`}
+            className={`block text-sm py-1 ${isActive('/explore') ? 'text-gray-900 dark:text-zinc-100 font-medium' : 'text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-zinc-100'}`}
           >
             Explore
           </Link>
           <Link
             href="/pricing"
             onClick={() => setMobileOpen(false)}
-            className={`block text-sm py-1 ${isActive('/pricing') ? 'text-gray-900 font-medium' : 'text-gray-700 hover:text-gray-900'}`}
+            className={`block text-sm py-1 ${isActive('/pricing') ? 'text-gray-900 dark:text-zinc-100 font-medium' : 'text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-zinc-100'}`}
           >
             Pricing
           </Link>
@@ -193,7 +197,7 @@ export function Nav() {
             href="https://github.com/bloom-base"
             target="_blank"
             rel="noopener noreferrer"
-            className="block text-sm text-gray-700 hover:text-gray-900 py-1"
+            className="block text-sm text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-zinc-100 py-1"
           >
             GitHub
           </a>
@@ -201,7 +205,7 @@ export function Nav() {
             <Link
               href="/admin"
               onClick={() => setMobileOpen(false)}
-              className={`block text-sm py-1 ${isActive('/admin') ? 'text-gray-900 font-medium' : 'text-gray-700 hover:text-gray-900'}`}
+              className={`block text-sm py-1 ${isActive('/admin') ? 'text-gray-900 dark:text-zinc-100 font-medium' : 'text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-zinc-100'}`}
             >
               Admin
             </Link>
@@ -210,19 +214,19 @@ export function Nav() {
             <Link
               href="/new"
               onClick={() => setMobileOpen(false)}
-              className={`block text-sm py-1 ${isActive('/new') ? 'text-gray-900 font-medium' : 'text-gray-700 hover:text-gray-900'}`}
+              className={`block text-sm py-1 ${isActive('/new') ? 'text-gray-900 dark:text-zinc-100 font-medium' : 'text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-zinc-100'}`}
             >
               New Project
             </Link>
           )}
-          <div className="pt-2 border-t border-gray-100">
+          <div className="pt-2 border-t border-gray-100 dark:border-zinc-800">
             {user ? (
               <div className="space-y-2">
                 <div className="flex items-center py-1">
                   <Link
                     href="/profile"
                     onClick={() => setMobileOpen(false)}
-                    className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900"
+                    className="flex items-center gap-2 text-sm text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-zinc-100"
                   >
                     {(user.avatar_url || userProfile?.avatar_url) ? (
                       <img
@@ -234,7 +238,7 @@ export function Nav() {
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                       />
                     ) : (
-                      <span className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-[9px] font-medium text-gray-600">
+                      <span className="w-5 h-5 rounded-full bg-gray-200 dark:bg-zinc-700 flex items-center justify-center text-[9px] font-medium text-gray-600 dark:text-zinc-300">
                         {user.username[0]?.toUpperCase()}
                       </span>
                     )}
@@ -246,7 +250,7 @@ export function Nav() {
                     setMobileOpen(false)
                     handleSignOut()
                   }}
-                  className="text-sm text-gray-400 hover:text-gray-900"
+                  className="text-sm text-gray-400 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-zinc-100"
                 >
                   Sign out
                 </button>
@@ -258,14 +262,14 @@ export function Nav() {
                     setMobileOpen(false)
                     redirectToLogin()
                   }}
-                  className="block text-sm text-gray-700 hover:text-gray-900 py-1"
+                  className="block text-sm text-gray-700 dark:text-zinc-300 hover:text-gray-900 dark:hover:text-zinc-100 py-1"
                 >
                   Sign in
                 </button>
                 <Link
                   href="/auth/register"
                   onClick={() => setMobileOpen(false)}
-                  className="block text-sm px-4 py-1.5 rounded-lg bg-gray-900 text-white hover:bg-gray-800 transition-colors text-center"
+                  className="block text-sm px-4 py-1.5 rounded-lg bg-gray-900 dark:bg-zinc-100 text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-zinc-200 transition-colors text-center"
                 >
                   Get started
                 </Link>
