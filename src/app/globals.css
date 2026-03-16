@@ -36,6 +36,15 @@ body {
   background: #a1a1aa;
 }
 
+/* Custom scrollbar - dark theme */
+.dark ::-webkit-scrollbar-thumb {
+  background: #52525b;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #71717a;
+}
+
 /* Focus styles - accent color */
 *:focus-visible {
   outline: 2px solid #8b5cf6;
