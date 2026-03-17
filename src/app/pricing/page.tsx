@@ -44,17 +44,17 @@ export default function PricingPage() {
       <div className="max-w-5xl mx-auto px-6 py-20">
         {/* Header */}
         <div className="text-center mb-16">
-          <h1 className="text-4xl font-semibold text-gray-900 mb-4">
+          <h1 className="text-4xl font-semibold text-gray-900 dark:text-gray-100 mb-4">
             Simple, transparent pricing
           </h1>
-          <p className="text-lg text-gray-500 max-w-xl mx-auto">
+          <p className="text-lg text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
             Start free. Upgrade when you need your own projects.
           </p>
         </div>
 
         {checkoutError && (
-          <div className="max-w-md mx-auto mb-8 p-4 rounded-lg bg-red-50 border border-red-200 text-center">
-            <p className="text-red-800 text-sm">{checkoutError}</p>
+          <div className="max-w-md mx-auto mb-8 p-4 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-center">
+            <p className="text-red-800 dark:text-red-200 text-sm">{checkoutError}</p>
           </div>
         )}
 
