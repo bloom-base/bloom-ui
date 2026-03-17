@@ -45,7 +45,7 @@ function notificationColor(type: NotificationItem['type']): string {
     case 'task_rejected':
       return 'text-red-500'
     default:
-      return 'text-gray-400'
+      return 'text-gray-400 dark:text-gray-500'
   }
 }
 
@@ -128,7 +128,7 @@ export function NotificationBell() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="relative p-1.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+        className="relative p-1.5 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,14 +147,14 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden z-50">
+        <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg dark:shadow-gray-900/50 overflow-hidden z-50">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-            <h3 className="text-sm font-medium text-gray-900">Notifications</h3>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+            <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Notifications</h3>
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllRead}
-                className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+                className="text-xs text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
               >
                 Mark all read
               </button>
@@ -165,19 +165,19 @@ export function NotificationBell() {
           <div className="max-h-[400px] overflow-y-auto">
             {loading ? (
               <div className="px-4 py-8 text-center">
-                <div className="inline-block w-5 h-5 border-2 border-gray-200 border-t-gray-500 rounded-full animate-spin" />
+                <div className="inline-block w-5 h-5 border-2 border-gray-200 dark:border-gray-700 border-t-gray-500 dark:border-t-gray-400 rounded-full animate-spin" />
               </div>
             ) : notifications.length === 0 ? (
               <div className="px-4 py-8 text-center">
-                <p className="text-sm text-gray-400">No notifications yet</p>
+                <p className="text-sm text-gray-400 dark:text-gray-500">No notifications yet</p>
               </div>
             ) : (
               <div>
                 {notifications.map((n) => {
                   const inner = (
                     <div
-                      className={`flex gap-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer ${
-                        !n.is_read ? 'bg-blue-50/40' : ''
+                      className={`flex gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer ${
+                        !n.is_read ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''
                       }`}
                       onClick={() => {
                         if (!n.is_read) handleMarkRead(n.id)
@@ -188,13 +188,13 @@ export function NotificationBell() {
                         {notificationIcon(n.type)}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm leading-tight ${!n.is_read ? 'font-medium text-gray-900' : 'text-gray-700'}`}>
+                        <p className={`text-sm leading-tight ${!n.is_read ? 'font-medium text-gray-900 dark:text-gray-100' : 'text-gray-700 dark:text-gray-300'}`}>
                           {n.title}
                         </p>
-                        <p className="text-xs text-gray-400 mt-0.5 truncate">
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">
                           {n.body}
                         </p>
-                        <p className="text-xs text-gray-300 mt-1 font-mono tabular-nums">
+                        <p className="text-xs text-gray-300 dark:text-gray-600 mt-1 font-mono tabular-nums">
                           {timeAgo(n.created_at)}
                         </p>
                       </div>
@@ -225,7 +225,7 @@ export function NotificationBell() {
           <Link
             href="/notifications"
             onClick={() => setOpen(false)}
-            className="block px-4 py-2.5 text-center text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-50 border-t border-gray-100 transition-colors"
+            className="block px-4 py-2.5 text-center text-xs text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 border-t border-gray-100 dark:border-gray-800 transition-colors"
           >
             View all notifications
           </Link>

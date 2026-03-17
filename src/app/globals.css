@@ -17,6 +17,11 @@ body {
   }
 }
 
+/* Smooth theme transition */
+html {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
 /* Custom scrollbar - light theme */
 ::-webkit-scrollbar {
   width: 8px;
@@ -36,6 +41,15 @@ body {
   background: #a1a1aa;
 }
 
+/* Custom scrollbar - dark theme */
+.dark ::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
 /* Focus styles - accent color */
 *:focus-visible {
   outline: 2px solid #8b5cf6;
@@ -43,7 +57,7 @@ body {
 }
 
 /* Smooth transitions */
-button, a, input, textarea {
+button, a, input, textarea, select {
   transition: all 0.15s ease;
 }
 
@@ -55,4 +69,8 @@ button, a, input, textarea {
 .card-hover:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.dark .card-hover:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
