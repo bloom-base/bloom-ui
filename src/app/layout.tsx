@@ -4,6 +4,7 @@ import { Toaster } from 'sonner'
 import './globals.css'
 import { Nav } from '@/components/Nav'
 import { Footer } from '@/components/Footer'
+import { ThemeProvider } from '@/lib/theme'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -38,11 +39,21 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="h-full">
-      <body className={`${inter.className} min-h-full flex flex-col bg-white text-gray-900`}>
-        <Toaster position="bottom-right" richColors closeButton />
-        <Nav />
-        <main className="flex-1">{children}</main>
-        <Footer />
+      <head>
+        {/* Prevent flash of wrong theme (FOUC) by applying dark class before first paint */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=localStorage.getItem('bloom-theme');var p=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';if((s||p)==='dark')document.documentElement.classList.add('dark')}catch(e){}})()`,
+          }}
+        />
+      </head>
+      <body className={`${inter.className} min-h-full flex flex-col bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 transition-colors duration-200`}>
+        <ThemeProvider>
+          <Toaster position="bottom-right" richColors closeButton />
+          <Nav />
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </ThemeProvider>
       </body>
     </html>
   )

@@ -36,7 +36,7 @@ export default function ProjectNav({ owner, repo, isOwner }: ProjectNavProps) {
   }
 
   return (
-    <div className="border-b border-gray-200 mb-8">
+    <div className="border-b border-gray-200 dark:border-gray-800 mb-8">
       <div className="flex gap-1 overflow-x-auto -mb-px">
         {allTabs.map(tab => (
           <Link
@@ -44,8 +44,8 @@ export default function ProjectNav({ owner, repo, isOwner }: ProjectNavProps) {
             href={`${basePath}${tab.path}`}
             className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
               isActive(tab.path)
-                ? 'border-gray-900 text-gray-900'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'border-gray-900 dark:border-gray-100 text-gray-900 dark:text-gray-100'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-700'
             }`}
           >
             {tab.label}
