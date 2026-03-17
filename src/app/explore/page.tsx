@@ -151,6 +151,7 @@ export default function ExplorePage() {
           </div>
           <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg w-fit" role="group" aria-label="Filter projects by activity">
             <button
+              onMouseEnter={() => setFilter('all')}
               onClick={() => setFilter('all')}
               aria-pressed={filter === 'all'}
               className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
@@ -162,6 +163,7 @@ export default function ExplorePage() {
               All ({searchFiltered.length})
             </button>
             <button
+              onMouseEnter={() => setFilter('active')}
               onClick={() => setFilter('active')}
               aria-pressed={filter === 'active'}
               className={`px-3 py-1.5 text-sm rounded-md transition-colors flex items-center gap-1.5 ${
@@ -174,6 +176,7 @@ export default function ExplorePage() {
               Active ({activeCount})
             </button>
             <button
+              onMouseEnter={() => setFilter('idle')}
               onClick={() => setFilter('idle')}
               aria-pressed={filter === 'idle'}
               className={`px-3 py-1.5 text-sm rounded-md transition-colors flex items-center gap-1.5 ${
