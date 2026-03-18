@@ -47,7 +47,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.className} min-h-full flex flex-col bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100`}>
+      <body className={`${inter.className} min-h-full flex flex-col bg-canvas text-ink`}>
         <ThemeProvider>
           <Toaster position="bottom-right" richColors closeButton />
           <Nav />
