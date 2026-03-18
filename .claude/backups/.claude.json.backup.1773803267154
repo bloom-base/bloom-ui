@@ -37,15 +37,7 @@
     ],
     "tengu_fgts": false,
     "tengu_attribution_header": true,
-    "tengu_satin_quoll": {},
-    "tengu_event_sampling_config": {},
-    "tengu_frond_boric": {},
-    "tengu_log_segment_events": false,
-    "tengu_log_datadog_events": true,
-    "tengu_marble_anvil": true,
-    "tengu_tool_pear": false,
-    "tengu_scarf_coffee": false,
-    "tengu_pid_based_version_locking": true
+    "tengu_satin_quoll": {}
   },
   "firstStartTime": "2026-03-18T03:06:14.600Z",
   "opusProMigrationComplete": true,
