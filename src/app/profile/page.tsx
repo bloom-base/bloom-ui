@@ -863,14 +863,14 @@ function ProfileContent() {
         </div>
 
         {/* Appearance */}
-        <div className="p-5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
-          <label className="text-xs font-mono text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+        <div className="p-5 rounded-xl bg-canvas-subtle border border-line">
+          <label className="text-xs font-mono text-ink-tertiary uppercase tracking-wider">
             Appearance
           </label>
           <div className="flex items-center justify-between mt-2">
             <div>
-              <p className="text-sm text-gray-900 dark:text-gray-100">Dark mode</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              <p className="text-sm text-ink">Dark mode</p>
+              <p className="text-xs text-ink-secondary mt-0.5">
                 Switch between light and dark themes.
               </p>
             </div>
@@ -880,11 +880,11 @@ function ProfileContent() {
               aria-checked={theme === 'dark'}
               aria-label="Toggle dark mode"
               className={`relative w-11 h-6 rounded-full transition-colors ${
-                theme === 'dark' ? 'bg-gray-900 dark:bg-violet-600' : 'bg-gray-300'
+                theme === 'dark' ? 'bg-accent' : 'bg-canvas-muted'
               }`}
             >
               <span
-                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
+                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${
                   theme === 'dark' ? 'translate-x-5' : 'translate-x-0'
                 }`}
               />
@@ -892,8 +892,8 @@ function ProfileContent() {
           </div>
         </div>
 
-        <div className="p-5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
-          <label className="text-xs font-mono text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+        <div className="p-5 rounded-xl bg-canvas-subtle border border-line">
+          <label className="text-xs font-mono text-ink-tertiary uppercase tracking-wider">
             User ID
           </label>
           <button
