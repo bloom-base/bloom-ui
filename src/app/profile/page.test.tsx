@@ -301,7 +301,7 @@ describe('ProfilePage', () => {
     it('shows notification toggle section', async () => {
       await renderProfile()
       expect(screen.getByText('Email notifications')).toBeInTheDocument()
-      expect(screen.getByRole('switch')).toBeInTheDocument()
+      expect(screen.getByRole('switch', { name: 'Toggle email notifications' })).toBeInTheDocument()
     })
   })
 
@@ -1088,7 +1088,7 @@ describe('ProfilePage', () => {
 
       await renderProfile({ user: { email_notifications: true } })
 
-      const toggle = screen.getByRole('switch')
+      const toggle = screen.getByRole('switch', { name: 'Toggle email notifications' })
       expect(toggle).toHaveAttribute('aria-checked', 'true')
 
       fireEvent.click(toggle)
@@ -1104,7 +1104,7 @@ describe('ProfilePage', () => {
 
       await renderProfile({ user: { email_notifications: false } })
 
-      const toggle = screen.getByRole('switch')
+      const toggle = screen.getByRole('switch', { name: 'Toggle email notifications' })
       expect(toggle).toHaveAttribute('aria-checked', 'false')
 
       fireEvent.click(toggle)
@@ -1120,7 +1120,7 @@ describe('ProfilePage', () => {
 
       await renderProfile({ user: { email_notifications: true } })
 
-      const toggle = screen.getByRole('switch')
+      const toggle = screen.getByRole('switch', { name: 'Toggle email notifications' })
       fireEvent.click(toggle)
 
       // Initially optimistically toggled off
