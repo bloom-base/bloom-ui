@@ -9,6 +9,7 @@ import { redirectToGitHubAuth, redirectToLogin } from '@/lib/auth'
 import { copyToClipboard } from '@/lib/clipboard'
 import { validatePassword } from '@/lib/utils'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { useTheme } from '@/contexts/ThemeContext'
 
 export default function ProfilePage() {
   return (
@@ -33,6 +34,7 @@ export default function ProfilePage() {
 function ProfileContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { theme, toggleTheme } = useTheme()
   const [user, setUser] = useState<UserProfile | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -860,8 +862,38 @@ function ProfileContent() {
           </div>
         </div>
 
-        <div className="p-5 rounded-xl bg-gray-50 border border-gray-100">
-          <label className="text-xs font-mono text-gray-400 uppercase tracking-wider">
+        {/* Appearance */}
+        <div className="p-5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
+          <label className="text-xs font-mono text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+            Appearance
+          </label>
+          <div className="flex items-center justify-between mt-2">
+            <div>
+              <p className="text-sm text-gray-900 dark:text-gray-100">Dark mode</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Switch between light and dark themes.
+              </p>
+            </div>
+            <button
+              onClick={toggleTheme}
+              role="switch"
+              aria-checked={theme === 'dark'}
+              aria-label="Toggle dark mode"
+              className={`relative w-11 h-6 rounded-full transition-colors ${
+                theme === 'dark' ? 'bg-gray-900 dark:bg-violet-600' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
+                  theme === 'dark' ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
+          <label className="text-xs font-mono text-gray-400 dark:text-gray-500 uppercase tracking-wider">
             User ID
           </label>
           <button
