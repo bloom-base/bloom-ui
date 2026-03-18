@@ -1,0 +1,50 @@
+{
+  "cachedGrowthBookFeatures": {
+    "tengu_claudeai_mcp_connectors": true,
+    "tengu_kairos_cron": true,
+    "tengu_herring_clock": false,
+    "tengu_keybinding_customization_release": true,
+    "tengu_marble_whisper": true,
+    "tengu_amber_quartz": true,
+    "tengu_thinkback": false,
+    "tengu_cicada_nap_ms": 0,
+    "tengu_miraculo_the_bard": false,
+    "tengu_miraculo_the_bard2": false,
+    "tengu_paper_halyard": false,
+    "tengu_chomp_inflection": false,
+    "tengu_penguins_off": null,
+    "tengu_desktop_upsell": {
+      "enable_shortcut_tip": false,
+      "enable_startup_dialog": false
+    },
+    "tengu_marble_lantern_disabled": false,
+    "tengu_pebble_leaf_prune": false,
+    "tengu_mcp_elicitation": true,
+    "tengu_swinburne_dune": true,
+    "tengu_coral_fern": false,
+    "tengu_basalt_3kr": false,
+    "tengu_summarize_tool_results": false,
+    "tengu_bergotte_lantern": false,
+    "tengu_sotto_voce": true,
+    "tengu_system_prompt_global_cache": false,
+    "tengu_turtle_carbon": true,
+    "tengu_glacier_2xr": false,
+    "enhanced_telemetry_beta": false,
+    "tengu_streaming_tool_execution2": true,
+    "tengu_moth_copse": false,
+    "tengu_tool_search_unsupported_models": [
+      "haiku"
+    ],
+    "tengu_fgts": false,
+    "tengu_attribution_header": true,
+    "tengu_satin_quoll": {}
+  },
+  "firstStartTime": "2026-03-18T02:36:08.844Z",
+  "opusProMigrationComplete": true,
+  "sonnet1m45MigrationComplete": true,
+  "userID": "c3b0fb2ef8e5e6271178e68a422ed936d74eeac2afa62543c1ba8a32e323a157",
+  "clientDataCache": {
+    "data": null,
+    "timestamp": 1773801368906
+  }
+}
