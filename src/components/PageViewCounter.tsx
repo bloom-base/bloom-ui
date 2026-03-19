@@ -15,7 +15,7 @@ export function PageViewCounter() {
       localStorage.setItem(STORAGE_KEY, String(next))
       setViews(next)
     } catch {
-      // localStorage unavailable (e.g. private browsing restrictions)
+      // localStorage unavailable (e.g. private browsing with strict restrictions)
     }
   }, [])
 
