@@ -59,13 +59,13 @@ export function ConfirmDialog({
       }}
     >
       <div className="flex items-center justify-center min-h-full p-4">
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 w-full max-w-sm">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
-          <p className="text-sm text-gray-500 mb-6">{description}</p>
+        <div className="bg-surface rounded-xl shadow-lg border border-line p-6 w-full max-w-sm">
+          <h3 className="text-lg font-semibold text-ink mb-2">{title}</h3>
+          <p className="text-sm text-ink-secondary mb-6">{description}</p>
           <div className="flex gap-3 justify-end">
             <button
               onClick={onCancel}
-              className="px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+              className="px-4 py-2 text-sm rounded-lg border border-line text-ink-secondary hover:bg-canvas-subtle transition-colors"
             >
               {cancelLabel}
             </button>
@@ -75,7 +75,7 @@ export function ConfirmDialog({
               className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                 destructive
                   ? 'bg-red-600 text-white hover:bg-red-700'
-                  : 'bg-gray-900 text-white hover:bg-gray-800'
+                  : 'bg-ink text-canvas hover:bg-ink/90'
               }`}
             >
               {confirmLabel}
