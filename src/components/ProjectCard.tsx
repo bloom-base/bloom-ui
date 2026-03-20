@@ -55,7 +55,7 @@ export function ProjectCard({
         <span className="flex items-center gap-1.5">
           <span
             className={`w-2 h-2 rounded-full ${
-              isActive ? 'bg-green-500 shadow-sm shadow-green-200' : 'bg-ink-tertiary'
+              isActive ? 'bg-green-500 shadow-sm shadow-green-500/30' : 'bg-ink-tertiary'
             }`}
           />
           <span className="text-ink-secondary">
