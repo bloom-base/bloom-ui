@@ -10,7 +10,6 @@ import {
   type NotificationItem,
 } from '@/lib/api'
 import { timeAgo } from '@/lib/utils'
-import { useUserEvent } from '@/lib/useUserEvents'
 
 function notificationIcon(type: NotificationItem['type']): string {
   switch (type) {
@@ -56,18 +55,25 @@ export function NotificationBell() {
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [loading, setLoading] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Fetch initial unread count once
-  useEffect(() => {
-    getUnreadNotificationCount()
-      .then(({ count }) => setUnreadCount(count))
-      .catch(() => {})
+  const fetchUnreadCount = useCallback(async () => {
+    try {
+      const { count } = await getUnreadNotificationCount()
+      setUnreadCount(count)
+    } catch {
+      // Silently fail — user may not be logged in
+    }
   }, [])
 
-  // Increment unread count on real-time notification events
-  useUserEvent('notification:new', useCallback(() => {
-    setUnreadCount((prev) => prev + 1)
-  }, []))
+  // Poll unread count every 30s
+  useEffect(() => {
+    fetchUnreadCount()
+    pollingRef.current = setInterval(fetchUnreadCount, 30000)
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current)
+    }
+  }, [fetchUnreadCount])
 
   // Load notifications when dropdown opens
   useEffect(() => {

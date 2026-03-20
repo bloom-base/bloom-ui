@@ -54,13 +54,10 @@ vi.mock('@/components/EvalDashboard', () => ({
   __esModule: true,
   default: () => <div data-testid="eval-dashboard">EvalDashboard</div>,
 }))
-vi.mock('@/components/AgentWorkspace', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/components/AgentWorkspace')>()
-  return {
-    ...actual,
-    default: () => <div data-testid="agent-workspace">AgentWorkspace</div>,
-  }
-})
+vi.mock('@/components/AgentWorkspace', () => ({
+  __esModule: true,
+  default: () => <div data-testid="agent-workspace">AgentWorkspace</div>,
+}))
 vi.mock('@/components/DiffViewer', () => ({
   __esModule: true,
   default: ({ onClose }: { onClose: () => void }) => (
@@ -121,9 +118,6 @@ const mockProject = {
   deploy_status: null as string | null,
   fly_app_name: null as string | null,
   deploy_error: null as string | null,
-  max_parallel_tasks: null as number | null,
-  auto_improve: false,
-  github_app_connected: true,
   created_at: '2026-01-15T00:00:00Z',
 }
 
@@ -506,7 +500,7 @@ describe('ProjectPage', () => {
       })
     })
 
-    it('shows Follow button for project owner', async () => {
+    it('does not show Follow button for project owner', async () => {
       setupMocks({
         loggedIn: true,
         user: { id: 'user-1' }, // Same as project owner_id
@@ -519,7 +513,7 @@ describe('ProjectPage', () => {
         expect(screen.getByText('Aurora')).toBeInTheDocument()
       })
 
-      expect(screen.getByText('Follow')).toBeInTheDocument()
+      expect(screen.queryByText('Follow')).not.toBeInTheDocument()
     })
 
     it('does not show Follow button when not logged in', async () => {
@@ -664,27 +658,10 @@ describe('ProjectPage', () => {
       expect(screen.queryByText('Fork')).not.toBeInTheDocument()
     })
 
-    it('shows Fork button for owner on flagship (bloom-base) projects', async () => {
+    it('does not show Fork button for project owner', async () => {
       setupMocks({
         loggedIn: true,
         user: { id: 'user-1', subscription_tier: 'pro' },
-        // Default mock project has github_repo: 'bloom-base/aurora'
-      })
-
-      render(<ProjectPage />)
-
-      await waitFor(() => {
-        expect(screen.getByText('Aurora')).toBeInTheDocument()
-      })
-
-      expect(screen.getByText('Fork')).toBeInTheDocument()
-    })
-
-    it('does not show Fork button for owner on non-flagship projects', async () => {
-      setupMocks({
-        loggedIn: true,
-        user: { id: 'user-1', subscription_tier: 'pro' },
-        project: { github_repo: 'testuser/aurora' },
       })
 
       render(<ProjectPage />)
@@ -1481,6 +1458,119 @@ describe('ProjectPage', () => {
   // NEW TESTS: Diff Button on TaskCard
   // ────────────────────────────────────────────────────────────
 
+  describe('TaskCard Diff Button', () => {
+    it('shows Diff button on completed tasks with PR URL', async () => {
+      setupMocks({
+        tasks: [{
+          id: 'task-diff',
+          status: 'completed' as const,
+          title: 'Diff task',
+          description: 'Has PR',
+          github_pr_url: 'https://github.com/bloom-base/aurora/pull/5',
+          current_stage: 0,
+          started_at: '2026-01-20T01:00:00Z',
+          completed_at: '2026-01-20T02:00:00Z',
+        }],
+      })
+
+      render(<ProjectPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Diff')).toBeInTheDocument()
+      })
+    })
+
+    it('loads diff files when Diff button is clicked', async () => {
+      vi.mocked(api.getTaskPRFiles).mockResolvedValue([
+        { filename: 'src/main.ts', status: 'modified', additions: 5, deletions: 2, patch: '+code' },
+      ] as api.PRFileChange[])
+
+      setupMocks({
+        tasks: [{
+          id: 'task-diff-click',
+          status: 'completed' as const,
+          title: 'Diff click task',
+          description: 'Click diff',
+          github_pr_url: 'https://github.com/bloom-base/aurora/pull/7',
+          current_stage: 0,
+          started_at: '2026-01-20T01:00:00Z',
+          completed_at: '2026-01-20T02:00:00Z',
+        }],
+      })
+      vi.mocked(api.getTaskProgress).mockResolvedValue([])
+
+      render(<ProjectPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Diff')).toBeInTheDocument()
+      })
+
+      // First expand the card (DiffViewer renders inside expanded section)
+      const card = screen.getByText('Diff click task').closest('[role="button"]')!
+      fireEvent.click(card)
+
+      await waitFor(() => {
+        expect(screen.getByText('\u25bc')).toBeInTheDocument()
+      })
+
+      // Now click the Diff button
+      fireEvent.click(screen.getByText('Diff'))
+
+      await waitFor(() => {
+        expect(api.getTaskPRFiles).toHaveBeenCalledWith('task-diff-click', 7)
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('diff-viewer')).toBeInTheDocument()
+      })
+    })
+
+    it('toggles diff off when Diff button is clicked again', async () => {
+      vi.mocked(api.getTaskPRFiles).mockResolvedValue([])
+
+      setupMocks({
+        tasks: [{
+          id: 'task-diff-toggle',
+          status: 'completed' as const,
+          title: 'Diff toggle task',
+          description: 'Toggle diff',
+          github_pr_url: 'https://github.com/bloom-base/aurora/pull/8',
+          current_stage: 0,
+          started_at: '2026-01-20T01:00:00Z',
+          completed_at: '2026-01-20T02:00:00Z',
+        }],
+      })
+      vi.mocked(api.getTaskProgress).mockResolvedValue([])
+
+      render(<ProjectPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Diff')).toBeInTheDocument()
+      })
+
+      // First expand the card
+      const card = screen.getByText('Diff toggle task').closest('[role="button"]')!
+      fireEvent.click(card)
+
+      await waitFor(() => {
+        expect(screen.getByText('\u25bc')).toBeInTheDocument()
+      })
+
+      // Open diff
+      fireEvent.click(screen.getByText('Diff'))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('diff-viewer')).toBeInTheDocument()
+      })
+
+      // Click diff again to close
+      fireEvent.click(screen.getByText('Diff'))
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('diff-viewer')).not.toBeInTheDocument()
+      })
+    })
+  })
 
   // ────────────────────────────────────────────────────────────
   // NEW TESTS: Show All Completed Tasks Toggle
@@ -2147,6 +2237,63 @@ describe('ProjectPage', () => {
       })
     })
 
+    it('loads diff for a specific PR in the chain when Diff button is clicked', async () => {
+      setupMocks({
+        tasks: [{
+          id: 'task-chain-diff',
+          status: 'completed' as const,
+          title: 'Chain diff task',
+          description: 'Diff in chain',
+          current_stage: 1,
+          started_at: '2026-01-20T01:00:00Z',
+          completed_at: '2026-01-20T02:00:00Z',
+        }],
+      })
+
+      // Override after setupMocks
+      vi.mocked(api.getTaskProgress).mockResolvedValue([])
+      vi.mocked(api.getTaskPRs).mockResolvedValue([
+        {
+          pr_number: 10,
+          pr_url: 'https://github.com/bloom-base/aurora/pull/10',
+          stage_number: 0,
+          stage_title: 'Stage 0',
+          status: 'merged',
+          is_final: false,
+          done_summary: 'Done stage 0',
+        },
+      ] as api.TaskPR[])
+      vi.mocked(api.getTaskPRFiles).mockResolvedValue([
+        { filename: 'src/index.ts', status: 'added', additions: 10, deletions: 0, patch: '+new code' },
+      ] as api.PRFileChange[])
+
+      render(<ProjectPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Chain diff task')).toBeInTheDocument()
+      })
+
+      // Expand the task card
+      const card = screen.getByText('Chain diff task').closest('[role="button"]')!
+      fireEvent.click(card)
+
+      await waitFor(() => {
+        expect(screen.getByText('PR Chain')).toBeInTheDocument()
+      })
+
+      // Click the Diff button next to PR #10
+      const diffButtons = screen.getAllByText('Diff')
+      fireEvent.click(diffButtons[0])
+
+      await waitFor(() => {
+        expect(api.getTaskPRFiles).toHaveBeenCalledWith('task-chain-diff', 10)
+      })
+
+      await waitFor(() => {
+        expect(screen.getByTestId('diff-viewer')).toBeInTheDocument()
+      })
+    })
+
     it('shows done_summary on PR chain entries', async () => {
       setupMocks({
         tasks: [{
@@ -2193,6 +2340,55 @@ describe('ProjectPage', () => {
   // NEW TESTS: DiffViewer Close Button Callback
   // ────────────────────────────────────────────────────────────
 
+  describe('DiffViewer Close Callback', () => {
+    it('closes diff when DiffViewer close button is clicked', async () => {
+      vi.mocked(api.getTaskPRFiles).mockResolvedValue([
+        { filename: 'src/main.ts', status: 'modified', additions: 3, deletions: 1, patch: '+code' },
+      ] as api.PRFileChange[])
+      vi.mocked(api.getTaskProgress).mockResolvedValue([])
+
+      setupMocks({
+        tasks: [{
+          id: 'task-diff-close',
+          status: 'completed' as const,
+          title: 'Diff close task',
+          description: 'Close diff via button',
+          github_pr_url: 'https://github.com/bloom-base/aurora/pull/12',
+          current_stage: 0,
+          started_at: '2026-01-20T01:00:00Z',
+          completed_at: '2026-01-20T02:00:00Z',
+        }],
+      })
+
+      render(<ProjectPage />)
+
+      await waitFor(() => {
+        expect(screen.getByText('Diff close task')).toBeInTheDocument()
+      })
+
+      // Expand the card first
+      const card = screen.getByText('Diff close task').closest('[role="button"]')!
+      fireEvent.click(card)
+
+      await waitFor(() => {
+        expect(screen.getByText('\u25bc')).toBeInTheDocument()
+      })
+
+      // Open diff
+      fireEvent.click(screen.getByText('Diff'))
+
+      await waitFor(() => {
+        expect(screen.getByTestId('diff-viewer')).toBeInTheDocument()
+      })
+
+      // Close diff via DiffViewer's close button (our mock renders "Close diff" button)
+      fireEvent.click(screen.getByText('Close diff'))
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('diff-viewer')).not.toBeInTheDocument()
+      })
+    })
+  })
 
   // ────────────────────────────────────────────────────────────
   // NEW TESTS: Tool Call Result Expansion in Progress Log
@@ -2230,7 +2426,7 @@ describe('ProjectPage', () => {
       fireEvent.click(card)
 
       await waitFor(() => {
-        expect(screen.getByText(/Read File/)).toBeInTheDocument()
+        expect(screen.getByText(/read_file/)).toBeInTheDocument()
       })
 
       // The output should exist with line-clamp-2 initially
@@ -2238,7 +2434,7 @@ describe('ProjectPage', () => {
       expect(outputEl.className).toContain('line-clamp-2')
 
       // Click on the tool call row to expand
-      const toolRow = screen.getByText(/Read File/).closest('.cursor-pointer')!
+      const toolRow = screen.getByText(/read_file/).closest('.cursor-pointer')!
       fireEvent.click(toolRow)
 
       // After click, the line-clamp should be removed
@@ -2284,11 +2480,11 @@ describe('ProjectPage', () => {
       fireEvent.click(card)
 
       await waitFor(() => {
-        expect(screen.getByText(/Bash/)).toBeInTheDocument()
+        expect(screen.getByText(/bash/)).toBeInTheDocument()
       })
 
       // The tool row should NOT have cursor-pointer class (not expandable)
-      const toolRow = screen.getByText(/Bash/).closest('.flex.items-start')!
+      const toolRow = screen.getByText(/bash/).closest('.flex.items-start')!
       expect(toolRow.className).not.toContain('cursor-pointer')
     })
   })
@@ -2328,83 +2524,6 @@ describe('ProjectPage', () => {
         expect(screen.queryByTitle('App preview')).not.toBeInTheDocument()
         // Toggle button should show "Preview" again
         expect(screen.getByText('Preview')).toBeInTheDocument()
-      })
-    })
-  })
-
-  // ────────────────────────────────────────────────────────────
-  // GitHub App connection banner + toast
-  // ────────────────────────────────────────────────────────────
-
-  describe('GitHub App connection', () => {
-    it('shows connect banner for owner when github_app_connected is false', async () => {
-      setupMocks({
-        project: { github_app_connected: false, owner_id: 'user-99' },
-        user: { id: 'user-99' },
-      })
-
-      render(<ProjectPage />)
-
-      await waitFor(() => {
-        expect(screen.getByText('Connect GitHub')).toBeInTheDocument()
-      })
-      expect(screen.getByText(/Install the Bloom app/)).toBeInTheDocument()
-      const link = screen.getByText('Install Bloom App →')
-      expect(link).toHaveAttribute('href', 'https://github.com/apps/bloom-base/installations/new')
-    })
-
-    it('hides connect banner when github_app_connected is true', async () => {
-      setupMocks({
-        project: { github_app_connected: true, owner_id: 'user-99' },
-        user: { id: 'user-99' },
-      })
-
-      render(<ProjectPage />)
-
-      await waitFor(() => {
-        expect(screen.getByText('Aurora')).toBeInTheDocument()
-      })
-      expect(screen.queryByText('Connect GitHub')).not.toBeInTheDocument()
-    })
-
-    it('hides connect banner for non-owners', async () => {
-      setupMocks({
-        project: { github_app_connected: false, owner_id: 'user-1' },
-        user: { id: 'user-99' },
-      })
-
-      render(<ProjectPage />)
-
-      await waitFor(() => {
-        expect(screen.getByText('Aurora')).toBeInTheDocument()
-      })
-      expect(screen.queryByText('Connect GitHub')).not.toBeInTheDocument()
-    })
-
-    it('shows success toast when app_installed=true is in URL', async () => {
-      // Set URL with query param before render
-      const originalLocation = window.location.search
-      Object.defineProperty(window, 'location', {
-        value: { ...window.location, search: '?app_installed=true' },
-        writable: true,
-      })
-      const replaceSpy = vi.spyOn(window.history, 'replaceState').mockImplementation(() => {})
-
-      setupMocks()
-
-      render(<ProjectPage />)
-
-      await waitFor(() => {
-        expect(mockToast.success).toHaveBeenCalledWith(
-          expect.stringContaining('GitHub App connected')
-        )
-      })
-      expect(replaceSpy).toHaveBeenCalledWith({}, '', '/bloom-base/aurora')
-
-      replaceSpy.mockRestore()
-      Object.defineProperty(window, 'location', {
-        value: { ...window.location, search: originalLocation },
-        writable: true,
       })
     })
   })

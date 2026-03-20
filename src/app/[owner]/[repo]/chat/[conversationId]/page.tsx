@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -8,8 +8,6 @@ import { getProjectByPath, getConversation, getConversationTasks, sendMessageStr
 import { useAutoScroll } from '@/lib/useAutoScroll'
 import { AgentMarkdown } from '@/components/Markdown'
 import { redirectToLogin } from '@/lib/auth'
-import { formatToolName, formatToolArgs } from '@/lib/utils'
-import { useUserEvent } from '@/lib/useUserEvents'
 
 interface Message {
   id: string
@@ -91,18 +89,6 @@ export default function ConversationPage() {
       })
       .finally(() => setLoading(false))
   }, [owner, repo, conversationId])
-
-  // Update task status in real-time via user event stream
-  useUserEvent('task:status_changed', useCallback((event) => {
-    if (!event.task_id) return
-    setCreatedTasks((prev) =>
-      prev.map((t) =>
-        t.id === event.task_id && event.status
-          ? { ...t, status: event.status as TaskEvent['status'] }
-          : t
-      )
-    )
-  }, []))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -302,12 +288,13 @@ export default function ConversationPage() {
                         ) : (
                           <span className="text-gray-400">⚡</span>
                         )}
-                        <span className="text-gray-700">{formatToolName(message.tool_name || '')}</span>
+                        <span className="text-gray-700">{message.tool_name}</span>
                         {message.tool_input && (() => {
                           try {
                             const input = JSON.parse(message.tool_input)
-                            const args = formatToolArgs(input)
-                            if (args) return <span className="text-gray-500 truncate">({args})</span>
+                            if (input.path) return <span className="text-gray-500 truncate">({input.path})</span>
+                            if (input.query) return <span className="text-gray-500 truncate">({input.query})</span>
+                            if (input.title) return <span className="text-gray-500 truncate">({input.title})</span>
                           } catch { /* ignore */ }
                           return null
                         })()}

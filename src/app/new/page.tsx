@@ -16,7 +16,6 @@ import {
   type UserProfile,
 } from '@/lib/api'
 import { redirectToLogin, redirectToGitHubAuth } from '@/lib/auth'
-import VisionWriter from '@/components/VisionWriter'
 
 interface Repo {
   id: number
@@ -55,7 +54,6 @@ export default function NewProjectPage() {
   const [githubUsername, setGithubUsername] = useState<string | null>(null)
   const [projectPublic, setProjectPublic] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
-  const [showVisionWriter, setShowVisionWriter] = useState(false)
 
   useEffect(() => {
     // Load user profile, existing projects, repos, and GitHub username in parallel
@@ -175,10 +173,6 @@ export default function NewProjectPage() {
         vision,
         is_public: projectPublic,
       })
-      if (!project.github_app_connected) {
-        window.location.href = 'https://github.com/apps/bloom-base/installations/new'
-        return
-      }
       router.push(`/${project.github_repo}`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create project')
@@ -601,52 +595,21 @@ export default function NewProjectPage() {
             </div>
           </div>
 
-          <div className="relative">
-            <textarea
-              value={vision}
-              onChange={(e) => setVision(e.target.value.slice(0, 5000))}
-              placeholder={`What do you want ${selectedRepo.name} to become?`}
-              rows={4}
-              className="w-full px-4 py-3 pb-10 rounded-lg bg-white border border-gray-300 text-gray-900 placeholder-gray-400 resize-none focus:outline-none focus:border-gray-400"
-            />
-            {!showVisionWriter && (
-              <div className="absolute bottom-0 right-0 p-3">
-                <button
-                  type="button"
-                  onClick={() => setShowVisionWriter(true)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-violet-600 bg-violet-50 hover:bg-violet-100 transition-colors"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                  </svg>
-                  Plan
-                </button>
-              </div>
-            )}
-          </div>
+          <textarea
+            value={vision}
+            onChange={(e) => setVision(e.target.value.slice(0, 1000))}
+            placeholder="e.g., A fast, minimal CLI tool for managing dotfiles. Should stay simple and Unix-philosophy oriented. No bloat."
+            rows={4}
+            className="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 text-gray-900 placeholder-gray-400 resize-none focus:outline-none focus:border-gray-400"
+          />
           <div className="flex items-center justify-between mt-2">
             <p className="text-xs text-gray-400">
               Be specific about what matters. This guides how the AI evaluates contributions.
             </p>
-            <span className={`text-xs tabular-nums ${vision.length > 4500 ? 'text-amber-500' : 'text-gray-300'}`}>
-              {vision.length}/5000
+            <span className={`text-xs tabular-nums ${vision.length > 900 ? 'text-amber-500' : 'text-gray-300'}`}>
+              {vision.length}/1000
             </span>
           </div>
-
-          {showVisionWriter && (
-            <div className="mt-3">
-              <VisionWriter
-                projectName={selectedRepo.name}
-                description={selectedRepo.description || ''}
-                repoName={selectedRepo.full_name}
-                onUseVision={(v) => {
-                  setVision(v)
-                  setShowVisionWriter(false)
-                }}
-                onClose={() => setShowVisionWriter(false)}
-              />
-            </div>
-          )}
 
           {/* Project visibility toggle */}
           <div className="border border-gray-200 rounded-lg p-4 mt-6">

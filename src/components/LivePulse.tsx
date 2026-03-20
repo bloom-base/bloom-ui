@@ -1,22 +1,54 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { getPublicLive, type PlatformLive, type LiveTask } from '@/lib/api'
 import { timeAgo } from '@/lib/utils'
 
 /**
- * LivePulse — platform activity widget for the homepage.
+ * LivePulse — a real-time platform activity widget for the homepage.
  * Shows active tasks being built and recently completed work.
- * Fetches once on mount — no polling.
+ * Polls every 30s for fresh data.
  */
 export function LivePulse() {
   const [data, setData] = useState<PlatformLive | null>(null)
+  const [prevData, setPrevData] = useState<PlatformLive | null>(null)
+  const [newIds, setNewIds] = useState<Set<string>>(new Set())
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  const fetchLive = async () => {
+    try {
+      const live = await getPublicLive()
+      setData(prev => {
+        if (prev) {
+          // Track newly appeared items for animation
+          const prevIds = new Set([
+            ...prev.active_tasks.map(t => t.id),
+            ...prev.recent_completions.map(t => t.id),
+          ])
+          const freshIds = new Set<string>()
+          for (const t of [...live.active_tasks, ...live.recent_completions]) {
+            if (!prevIds.has(t.id)) freshIds.add(t.id)
+          }
+          if (freshIds.size > 0) {
+            setNewIds(freshIds)
+            setTimeout(() => setNewIds(new Set()), 1000)
+          }
+          setPrevData(prev)
+        }
+        return live
+      })
+    } catch {
+      // Silently fail — homepage stays functional
+    }
+  }
 
   useEffect(() => {
-    getPublicLive()
-      .then(setData)
-      .catch(() => {})
+    fetchLive()
+    intervalRef.current = setInterval(fetchLive, 30_000)
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
   }, [])
 
   if (!data) {
@@ -47,6 +79,7 @@ export function LivePulse() {
           key={task.id}
           task={task}
           type="building"
+          isNew={newIds.has(task.id)}
         />
       ))}
 
@@ -56,18 +89,23 @@ export function LivePulse() {
           key={task.id}
           task={task}
           type="shipped"
+          isNew={newIds.has(task.id)}
         />
       ))}
     </div>
   )
 }
 
-function TaskRow({ task, type }: { task: LiveTask; type: 'building' | 'shipped' }) {
+function TaskRow({ task, type, isNew }: { task: LiveTask; type: 'building' | 'shipped'; isNew: boolean }) {
   const isBuilding = type === 'building'
   const timestamp = isBuilding ? task.started_at : task.completed_at
 
   return (
-    <div className="flex items-center gap-3 py-2.5 px-3 rounded-lg hover:bg-gray-50 transition-colors">
+    <div
+      className={`flex items-center gap-3 py-2.5 px-3 rounded-lg transition-all duration-500 ${
+        isNew ? 'bg-gray-100' : 'hover:bg-gray-50'
+      }`}
+    >
       {/* Status indicator */}
       <div className="shrink-0">
         {isBuilding ? (

@@ -5,7 +5,6 @@ import { useParams, useRouter, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { getProjectByPath, updateProject, deleteProject, getCurrentUser, getProjectMembers, inviteProjectMember, removeProjectMember, type Project, type ProjectMember, type UserProfile } from '@/lib/api'
-import VisionWriter from '@/components/VisionWriter'
 
 // Reserved paths that should NOT be treated as owner/repo
 const RESERVED_PATHS = ['explore', 'new', 'auth', 'api', 'projects', 'settings', '_next', 'favicon.ico', 'profile', 'pricing', 'admin', 'analytics', 'u', 'terms', 'privacy']
@@ -34,9 +33,6 @@ export default function ProjectSettingsPage() {
   const [inviteUsername, setInviteUsername] = useState('')
   const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member')
   const [inviteLoading, setInviteLoading] = useState(false)
-
-  // Vision writer state
-  const [showVisionWriter, setShowVisionWriter] = useState(false)
 
   // Delete state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -190,53 +186,22 @@ export default function ProjectSettingsPage() {
             <label htmlFor="vision" className="block text-sm font-medium text-gray-700 mb-1">
               Vision
             </label>
-            <div className="relative">
-              <textarea
-                id="vision"
-                value={vision}
-                onChange={(e) => setVision(e.target.value.slice(0, 5000))}
-                rows={4}
-                className="w-full px-3 py-2 pb-10 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent resize-none"
-                placeholder={`What do you want ${project.name} to become?`}
-              />
-              {!showVisionWriter && (
-                <div className="absolute bottom-0 right-0 p-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowVisionWriter(true)}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-violet-600 bg-violet-50 hover:bg-violet-100 transition-colors"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                    </svg>
-                    Plan
-                  </button>
-                </div>
-              )}
-            </div>
+            <textarea
+              id="vision"
+              value={vision}
+              onChange={(e) => setVision(e.target.value.slice(0, 1000))}
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent resize-none"
+              placeholder="What is this project trying to achieve? This guides the AI maintainer."
+            />
             <div className="mt-1 flex items-center justify-between">
               <p className="text-xs text-gray-400">
                 The vision helps the AI decide which ideas to accept or reject.
               </p>
-              <span className={`text-xs tabular-nums ${vision.length > 4500 ? 'text-amber-500' : 'text-gray-300'}`}>
-                {vision.length}/5000
+              <span className={`text-xs tabular-nums ${vision.length > 900 ? 'text-amber-500' : 'text-gray-300'}`}>
+                {vision.length}/1000
               </span>
             </div>
-
-            {showVisionWriter && (
-              <div className="mt-3">
-                <VisionWriter
-                  projectName={project.name}
-                  description={project.description}
-                  repoName={project.github_repo}
-                  onUseVision={(v) => {
-                    setVision(v)
-                    setShowVisionWriter(false)
-                  }}
-                  onClose={() => setShowVisionWriter(false)}
-                />
-              </div>
-            )}
           </div>
 
           {/* Visibility */}

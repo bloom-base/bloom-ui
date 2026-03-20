@@ -144,7 +144,7 @@ describe('EvalDashboard', () => {
       expect(screen.getByText('Recent')).toBeTruthy()
       expect(screen.getByText('claude-sonnet-4-5-20250929')).toBeTruthy()
       expect(screen.getByText('$0.35')).toBeTruthy()
-      expect(screen.getByText('15 turns')).toBeTruthy()
+      expect(screen.getByText('15t')).toBeTruthy()
       expect(screen.getByText('90')).toBeTruthy()
     })
   })

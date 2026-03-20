@@ -21,12 +21,12 @@ export interface Project {
   deploy_error: string | null
   max_parallel_tasks: number | null
   auto_improve: boolean
-  github_app_connected: boolean
   created_at: string
 }
 
 export interface ActiveTasksStatus {
   active_count: number
+  stage_waiting_count: number
   queued_count: number
   max_parallel_tasks: number
   has_capacity: boolean
@@ -376,65 +376,6 @@ function parseSSEDataFrames(chunkBuffer: string): { frames: string[]; remainder:
   return { frames, remainder }
 }
 
-// Vision writing assistant
-
-export interface VisionAssistMessage {
-  role: 'user' | 'assistant'
-  content: string
-}
-
-export async function streamVisionAssist(
-  projectName: string,
-  messages: VisionAssistMessage[],
-  onText: (text: string) => void,
-  signal?: AbortSignal,
-  opts?: { description?: string; repoName?: string }
-): Promise<void> {
-  const response = await fetch(`${API_URL}/projects/vision-assist`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      project_name: projectName,
-      project_description: opts?.description || '',
-      repo_name: opts?.repoName || '',
-      messages,
-    }),
-    signal,
-  })
-
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`)
-  }
-
-  const reader = response.body?.getReader()
-  if (!reader) throw new Error('No response body')
-
-  const decoder = new TextDecoder()
-  let buffer = ''
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-
-    buffer += decoder.decode(value, { stream: true })
-    const { frames, remainder } = parseSSEDataFrames(buffer)
-    buffer = remainder
-
-    for (const data of frames) {
-      if (data === '[DONE]') return
-      try {
-        const parsed = JSON.parse(data)
-        if (parsed.type === 'text' && parsed.content) {
-          onText(parsed.content)
-        }
-      } catch {
-        // Ignore malformed frames
-      }
-    }
-  }
-}
-
 export async function sendMessageStream(
   conversationId: string,
   content: string,
@@ -505,7 +446,7 @@ export async function sendMessageStream(
 // Tasks
 
 export interface TaskStreamEvent {
-  type: 'connected' | 'turn' | 'turn_start' | 'thinking' | 'agent_text' | 'tool_call' | 'tool_output' | 'tool_result' | 'complete' | 'stream_end' | 'pause_requested' | 'paused' | 'resumed' | 'guidance' | 'guidance_received' | 'reviewing' | 'review_stage' | 'deploying' | 'lifecycle'
+  type: 'connected' | 'turn_start' | 'agent_text' | 'tool_call' | 'tool_output' | 'tool_result' | 'complete' | 'stream_end' | 'pause_requested' | 'paused' | 'resumed' | 'guidance' | 'guidance_received'
   task_id?: string
   turn?: number
   max_turns?: number
@@ -518,23 +459,15 @@ export interface TaskStreamEvent {
   status?: string
   pr_url?: string
   message?: string
-  event?: string  // For lifecycle events (e.g., 'setup_cloning', 'agent_started')
-  stage?: string  // For review_stage events (e.g., 'running_tests')
-  agent?: string  // 'reviewer' for reviewer text, absent for coder
-  thinking?: string  // For turn records from DB replay
-  tool_calls?: Array<Record<string, unknown>>  // For turn records from DB replay
-  total_cost_usd?: number  // Running cost piggybacked on every event
 }
 
 export function streamTaskEvents(
   taskId: string,
   onEvent: (event: TaskStreamEvent) => void,
   signal?: AbortSignal,
-  onError?: (error: Error) => void,
-  onClose?: () => void,
+  onError?: (error: Error) => void
 ): void {
   const url = `${API_URL}/tasks/${taskId}/stream`
-  let receivedComplete = false
 
   fetch(url, {
     credentials: 'include',
@@ -559,9 +492,6 @@ export function streamTaskEvents(
           if (!data || data === '[DONE]') continue
           try {
             const parsed = JSON.parse(data) as TaskStreamEvent
-            if (parsed.type === 'complete' || parsed.type === 'stream_end') {
-              receivedComplete = true
-            }
             onEvent(parsed)
           } catch {
             // Ignore malformed non-JSON frames.
@@ -575,75 +505,9 @@ export function streamTaskEvents(
         if (data && data !== '[DONE]') {
           try {
             const parsed = JSON.parse(data) as TaskStreamEvent
-            if (parsed.type === 'complete' || parsed.type === 'stream_end') {
-              receivedComplete = true
-            }
             onEvent(parsed)
           } catch {
             // Ignore malformed trailing data.
-          }
-        }
-      }
-
-      // Stream ended — notify caller if we never got a completion event
-      // (e.g., API restarted, connection dropped during deploy)
-      if (!receivedComplete) {
-        onClose?.()
-      }
-    })
-    .catch((error) => {
-      if (error.name !== 'AbortError') {
-        onError?.(error)
-      }
-    })
-}
-
-// User event stream — replaces all polling
-export interface UserEvent {
-  type: 'connected' | 'task:status_changed' | 'notification:new' | 'deploy:status_changed'
-  task_id?: string
-  project_id?: string
-  status?: string
-  title?: string
-  project_name?: string
-  notification_type?: string
-  body?: string
-  deployed_url?: string
-  error?: string
-}
-
-export function streamUserEvents(
-  onEvent: (event: UserEvent) => void,
-  signal?: AbortSignal,
-  onError?: (error: Error) => void
-): void {
-  const url = `${API_URL}/user/events/stream`
-
-  fetch(url, {
-    credentials: 'include',
-    signal,
-  })
-    .then(async (response) => {
-      if (!response.ok) throw new Error(`API error: ${response.status}`)
-      const reader = response.body!.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const { frames, remainder } = parseSSEDataFrames(buffer)
-        buffer = remainder
-
-        for (const data of frames) {
-          if (!data || data === '[DONE]') continue
-          try {
-            const parsed = JSON.parse(data) as UserEvent
-            onEvent(parsed)
-          } catch {
-            // Ignore malformed frames
           }
         }
       }
@@ -657,8 +521,7 @@ export function streamUserEvents(
 
 export interface QueueStatus {
   queue_counts: Record<string, number>
-  current_task: { id: string; title: string; project_id: string; started_at: string | null } | null
-  active_tasks: { id: string; title: string; project_id: string; started_at: string | null }[]
+  current_task: { id: string; title: string; project_id: string } | null
   total_pending: number
 }
 

@@ -830,7 +830,7 @@ describe('ConversationPage', () => {
       render(<ConversationPage />)
 
       await waitFor(() => {
-        expect(screen.getByText('Read File')).toBeInTheDocument()
+        expect(screen.getByText('read_file')).toBeInTheDocument()
       })
     })
 
@@ -840,7 +840,7 @@ describe('ConversationPage', () => {
       render(<ConversationPage />)
 
       await waitFor(() => {
-        expect(screen.getByText('(path=config.json)')).toBeInTheDocument()
+        expect(screen.getByText('(config.json)')).toBeInTheDocument()
       })
     })
 
@@ -850,7 +850,7 @@ describe('ConversationPage', () => {
       render(<ConversationPage />)
 
       await waitFor(() => {
-        expect(screen.getByText('Read File')).toBeInTheDocument()
+        expect(screen.getByText('read_file')).toBeInTheDocument()
       })
 
       expect(screen.queryByText('{"debug": true}')).not.toBeInTheDocument()
@@ -872,11 +872,11 @@ describe('ConversationPage', () => {
       render(<ConversationPage />)
 
       await waitFor(() => {
-        expect(screen.getByText('Read File')).toBeInTheDocument()
+        expect(screen.getByText('read_file')).toBeInTheDocument()
       })
 
       // Click the tool header to expand
-      const toolHeader = screen.getByText('Read File').closest('div[class*="cursor-pointer"]') || screen.getByText('Read File').parentElement
+      const toolHeader = screen.getByText('read_file').closest('div[class*="cursor-pointer"]') || screen.getByText('read_file').parentElement
       if (toolHeader) {
         await userEvent.click(toolHeader)
       }
@@ -892,11 +892,11 @@ describe('ConversationPage', () => {
       render(<ConversationPage />)
 
       await waitFor(() => {
-        expect(screen.getByText('Read File')).toBeInTheDocument()
+        expect(screen.getByText('read_file')).toBeInTheDocument()
       })
 
       // Expand
-      const toolHeader = screen.getByText('Read File').closest('div[class*="cursor-pointer"]') || screen.getByText('Read File').parentElement
+      const toolHeader = screen.getByText('read_file').closest('div[class*="cursor-pointer"]') || screen.getByText('read_file').parentElement
       if (toolHeader) {
         await userEvent.click(toolHeader)
       }
@@ -935,9 +935,9 @@ describe('ConversationPage', () => {
       await userEvent.click(submitBtn)
 
       await waitFor(() => {
-        expect(screen.getByText('Search Code')).toBeInTheDocument()
+        expect(screen.getByText('search_code')).toBeInTheDocument()
       })
-      expect(screen.getByText('(query=dark mode)')).toBeInTheDocument()
+      expect(screen.getByText('(dark mode)')).toBeInTheDocument()
     })
 
     it('tool with title input shows title in parentheses', async () => {
@@ -954,7 +954,7 @@ describe('ConversationPage', () => {
       render(<ConversationPage />)
 
       await waitFor(() => {
-        expect(screen.getByText('(title=Add tests)')).toBeInTheDocument()
+        expect(screen.getByText('(Add tests)')).toBeInTheDocument()
       })
     })
   })
@@ -1581,11 +1581,11 @@ describe('ConversationPage', () => {
       await waitFor(() => {
         expect(screen.getByText('Do something')).toBeInTheDocument()
       })
-      expect(screen.getByText('Read File')).toBeInTheDocument()
-      expect(screen.getByText('Search Code')).toBeInTheDocument()
+      expect(screen.getByText('read_file')).toBeInTheDocument()
+      expect(screen.getByText('search_code')).toBeInTheDocument()
       expect(screen.getByText('I found some things.')).toBeInTheDocument()
       expect(screen.getByText('Do more')).toBeInTheDocument()
-      expect(screen.getByText('Write File')).toBeInTheDocument()
+      expect(screen.getByText('write_file')).toBeInTheDocument()
       expect(screen.getByText('Done!')).toBeInTheDocument()
     })
   })
@@ -1703,15 +1703,15 @@ describe('ConversationPage', () => {
       })
 
       // Both tool calls should be rendered with their inputs
-      expect(screen.getByText('(path=a.ts)')).toBeInTheDocument()
-      expect(screen.getByText('(query=TODO)')).toBeInTheDocument()
+      expect(screen.getByText('(a.ts)')).toBeInTheDocument()
+      expect(screen.getByText('(TODO)')).toBeInTheDocument()
 
       // Both tools got their results (shown by "click to expand" hints)
       const expandHints = screen.getAllByText('click to expand')
       expect(expandHints.length).toBeGreaterThanOrEqual(2)
 
       // Expand read_file tool and verify its specific output
-      const readFileHeader = screen.getByText('(path=a.ts)').closest('div[class*="cursor-pointer"]') || screen.getByText('(path=a.ts)').parentElement
+      const readFileHeader = screen.getByText('(a.ts)').closest('div[class*="cursor-pointer"]') || screen.getByText('(a.ts)').parentElement
       if (readFileHeader) {
         await userEvent.click(readFileHeader)
       }
@@ -1746,8 +1746,8 @@ describe('ConversationPage', () => {
       })
 
       // Both tool calls should be rendered with their file paths
-      expect(screen.getByText('(path=first.ts)')).toBeInTheDocument()
-      expect(screen.getByText('(path=second.ts)')).toBeInTheDocument()
+      expect(screen.getByText('(first.ts)')).toBeInTheDocument()
+      expect(screen.getByText('(second.ts)')).toBeInTheDocument()
 
       // Both should show "click to expand" meaning they both have output
       const expandHints = screen.getAllByText('click to expand')
@@ -1798,9 +1798,9 @@ describe('ConversationPage', () => {
       await waitFor(() => {
         expect(screen.getByText('Let me analyze this. I found relevant code. I created a task for you.')).toBeInTheDocument()
       })
-      expect(screen.getByText('Search Code')).toBeInTheDocument()
-      expect(screen.getByText('(query=dark mode)')).toBeInTheDocument()
-      expect(screen.getByText('Create Task')).toBeInTheDocument()
+      expect(screen.getByText('search_code')).toBeInTheDocument()
+      expect(screen.getByText('(dark mode)')).toBeInTheDocument()
+      expect(screen.getByText('create_task')).toBeInTheDocument()
       expect(screen.getByText('Implement dark mode')).toBeInTheDocument()
       expect(screen.getByText('Task Proposed')).toBeInTheDocument()
       expect(screen.getByText('Approve')).toBeInTheDocument()
@@ -1914,7 +1914,7 @@ describe('ConversationPage', () => {
       render(<ConversationPage />)
 
       await waitFor(() => {
-        expect(screen.getByText('List Files')).toBeInTheDocument()
+        expect(screen.getByText('list_files')).toBeInTheDocument()
       })
 
       // Should NOT show "click to expand" since there's no output

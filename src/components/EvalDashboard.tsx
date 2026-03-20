@@ -107,8 +107,8 @@ export default function EvalDashboard({ projectId }: { projectId: string }) {
               <div key={ev.task_id} className="flex items-center justify-between text-xs">
                 <span className="text-zinc-600 truncate max-w-[140px]">{ev.model_used || 'unknown'}</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-zinc-400 font-mono">{ev.total_turns} turns</span>
-                  <span className="text-zinc-400 font-mono">${(Number(ev.total_cost_usd) || 0).toFixed(2)}</span>
+                  <span className="text-zinc-400 font-mono">{ev.total_turns}t</span>
+                  <span className="text-zinc-400 font-mono">${ev.total_cost_usd.toFixed(2)}</span>
                   <QualityBadge score={ev.quality_score} />
                 </div>
               </div>

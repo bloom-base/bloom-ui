@@ -706,7 +706,7 @@ describe('NewProjectPage', () => {
       fireEvent.click(screen.getByText('my-repo').closest('button')!)
 
       await waitFor(() => {
-        expect(screen.getByPlaceholderText(/What do you want .+ to become/)).toBeInTheDocument()
+        expect(screen.getByPlaceholderText(/A fast, minimal CLI tool/)).toBeInTheDocument()
       })
     })
 
@@ -722,16 +722,16 @@ describe('NewProjectPage', () => {
       fireEvent.click(screen.getByText('my-repo').closest('button')!)
 
       await waitFor(() => {
-        expect(screen.getByPlaceholderText(/What do you want .+ to become/)).toBeInTheDocument()
+        expect(screen.getByPlaceholderText(/A fast, minimal CLI tool/)).toBeInTheDocument()
       })
 
-      const textarea = screen.getByPlaceholderText(/What do you want .+ to become/) as HTMLTextAreaElement
+      const textarea = screen.getByPlaceholderText(/A fast, minimal CLI tool/) as HTMLTextAreaElement
       fireEvent.change(textarea, { target: { value: 'Build an amazing tool' } })
 
       expect(textarea.value).toBe('Build an amazing tool')
     })
 
-    it('vision textarea enforces 5000 character limit', async () => {
+    it('vision textarea enforces 1000 character limit', async () => {
       setupProUserWithRepos()
 
       render(<NewProjectPage />)
@@ -743,15 +743,15 @@ describe('NewProjectPage', () => {
       fireEvent.click(screen.getByText('my-repo').closest('button')!)
 
       await waitFor(() => {
-        expect(screen.getByPlaceholderText(/What do you want .+ to become/)).toBeInTheDocument()
+        expect(screen.getByPlaceholderText(/A fast, minimal CLI tool/)).toBeInTheDocument()
       })
 
-      const textarea = screen.getByPlaceholderText(/What do you want .+ to become/) as HTMLTextAreaElement
-      const longText = 'a'.repeat(6000)
+      const textarea = screen.getByPlaceholderText(/A fast, minimal CLI tool/) as HTMLTextAreaElement
+      const longText = 'a'.repeat(1500)
       fireEvent.change(textarea, { target: { value: longText } })
 
-      // The onChange slices to 5000
-      expect(textarea.value.length).toBe(5000)
+      // The onChange slices to 1000
+      expect(textarea.value.length).toBe(1000)
     })
 
     it('shows character count', async () => {
@@ -766,7 +766,7 @@ describe('NewProjectPage', () => {
       fireEvent.click(screen.getByText('my-repo').closest('button')!)
 
       await waitFor(() => {
-        expect(screen.getByText('0/5000')).toBeInTheDocument()
+        expect(screen.getByText('0/1000')).toBeInTheDocument()
       })
     })
 
@@ -782,13 +782,13 @@ describe('NewProjectPage', () => {
       fireEvent.click(screen.getByText('my-repo').closest('button')!)
 
       await waitFor(() => {
-        expect(screen.getByText('0/5000')).toBeInTheDocument()
+        expect(screen.getByText('0/1000')).toBeInTheDocument()
       })
 
-      const textarea = screen.getByPlaceholderText(/What do you want .+ to become/)
+      const textarea = screen.getByPlaceholderText(/A fast, minimal CLI tool/)
       fireEvent.change(textarea, { target: { value: 'Hello world' } })
 
-      expect(screen.getByText('11/5000')).toBeInTheDocument()
+      expect(screen.getByText('11/1000')).toBeInTheDocument()
     })
 
     it('shows repo name in the vision step prompt text', async () => {
@@ -1308,7 +1308,6 @@ describe('NewProjectPage', () => {
         deploy_error: null,
         max_parallel_tasks: null,
         auto_improve: false,
-        github_app_connected: true,
         created_at: '2026-03-01T00:00:00Z',
       })
 
@@ -1326,7 +1325,7 @@ describe('NewProjectPage', () => {
       })
 
       // Fill in vision
-      const textarea = screen.getByPlaceholderText(/What do you want .+ to become/)
+      const textarea = screen.getByPlaceholderText(/A fast, minimal CLI tool/)
       fireEvent.change(textarea, { target: { value: 'Build something awesome' } })
 
       // Create project
@@ -1361,7 +1360,6 @@ describe('NewProjectPage', () => {
         deploy_error: null,
         max_parallel_tasks: null,
         auto_improve: false,
-        github_app_connected: true,
         created_at: '2026-03-01T00:00:00Z',
       })
 
@@ -1382,49 +1380,6 @@ describe('NewProjectPage', () => {
       await waitFor(() => {
         expect(mockPush).toHaveBeenCalledWith('/testuser/cool-app')
       })
-    })
-
-    it('redirects to GitHub App install when github_app_connected is false', async () => {
-      setupProUserWithRepos([
-        makeRepo({ name: 'cool-app', full_name: 'testuser/cool-app', description: '' }),
-      ])
-      vi.mocked(api.createProject).mockResolvedValue({
-        id: 'proj-new',
-        name: 'cool-app',
-        description: '',
-        github_repo: 'testuser/cool-app',
-        owner_id: 'user-1',
-        is_public: false,
-        vision: '',
-        deployed_url: null,
-        deploy_status: null,
-        fly_app_name: null,
-        deploy_error: null,
-        max_parallel_tasks: null,
-        auto_improve: false,
-        github_app_connected: false,
-        created_at: '2026-03-01T00:00:00Z',
-      })
-
-      render(<NewProjectPage />)
-
-      await waitFor(() => {
-        expect(screen.getByText('cool-app')).toBeInTheDocument()
-      })
-
-      fireEvent.click(screen.getByText('cool-app').closest('button')!)
-
-      await waitFor(() => {
-        expect(screen.getByText('Create Project')).toBeInTheDocument()
-      })
-
-      fireEvent.click(screen.getByText('Create Project'))
-
-      await waitFor(() => {
-        expect(window.location.href).toBe('https://github.com/apps/bloom-base/installations/new')
-      })
-      // Should NOT call router.push
-      expect(mockPush).not.toHaveBeenCalled()
     })
 
     it('shows "Creating..." while project is being created', async () => {
@@ -1544,7 +1499,6 @@ describe('NewProjectPage', () => {
         deploy_error: null,
         max_parallel_tasks: null,
         auto_improve: false,
-        github_app_connected: true,
         created_at: '2026-03-01T00:00:00Z',
       })
 
@@ -1561,7 +1515,7 @@ describe('NewProjectPage', () => {
       })
 
       // Type vision
-      fireEvent.change(screen.getByPlaceholderText(/What do you want .+ to become/), {
+      fireEvent.change(screen.getByPlaceholderText(/A fast, minimal CLI tool/), {
         target: { value: 'Open source forever' },
       })
 
@@ -1603,7 +1557,6 @@ describe('NewProjectPage', () => {
         deploy_error: null,
         max_parallel_tasks: null,
         auto_improve: false,
-        github_app_connected: true,
         created_at: '2026-03-01T00:00:00Z',
       })
 
@@ -1666,7 +1619,6 @@ describe('NewProjectPage', () => {
         deploy_error: null,
         max_parallel_tasks: null,
         auto_improve: false,
-        github_app_connected: true,
         created_at: '2026-03-01T00:00:00Z',
       })
 
@@ -1693,7 +1645,7 @@ describe('NewProjectPage', () => {
       expect(screen.getByText('testuser/brand-new')).toBeInTheDocument()
 
       // Fill in vision
-      fireEvent.change(screen.getByPlaceholderText(/What do you want .+ to become/), {
+      fireEvent.change(screen.getByPlaceholderText(/A fast, minimal CLI tool/), {
         target: { value: 'The next big thing' },
       })
 
@@ -1918,7 +1870,6 @@ describe('NewProjectPage', () => {
         deploy_error: null,
         max_parallel_tasks: null,
         auto_improve: false,
-        github_app_connected: true,
         created_at: '2026-03-01T00:00:00Z',
       })
 
@@ -1964,35 +1915,35 @@ describe('NewProjectPage', () => {
       })
     }
 
-    it('character counter turns amber when above 4500 characters', async () => {
+    it('character counter turns amber when above 900 characters', async () => {
       await goToVisionStep()
 
-      const textarea = screen.getByPlaceholderText(/What do you want .+ to become/)
-      const longText = 'a'.repeat(4501)
+      const textarea = screen.getByPlaceholderText(/A fast, minimal CLI tool/)
+      const longText = 'a'.repeat(901)
       fireEvent.change(textarea, { target: { value: longText } })
 
-      const counter = screen.getByText('4501/5000')
+      const counter = screen.getByText('901/1000')
       expect(counter.className).toContain('text-amber-500')
     })
 
-    it('character counter stays gray when at or below 4500 characters', async () => {
+    it('character counter stays gray when at or below 900 characters', async () => {
       await goToVisionStep()
 
-      const textarea = screen.getByPlaceholderText(/What do you want .+ to become/)
-      fireEvent.change(textarea, { target: { value: 'a'.repeat(4500) } })
+      const textarea = screen.getByPlaceholderText(/A fast, minimal CLI tool/)
+      fireEvent.change(textarea, { target: { value: 'a'.repeat(900) } })
 
-      const counter = screen.getByText('4500/5000')
+      const counter = screen.getByText('900/1000')
       expect(counter.className).toContain('text-gray-300')
     })
 
-    it('character counter shows exact count at boundary of 5000', async () => {
+    it('character counter shows exact count at boundary of 1000', async () => {
       await goToVisionStep()
 
-      const textarea = screen.getByPlaceholderText(/What do you want .+ to become/)
-      fireEvent.change(textarea, { target: { value: 'x'.repeat(5000) } })
+      const textarea = screen.getByPlaceholderText(/A fast, minimal CLI tool/)
+      fireEvent.change(textarea, { target: { value: 'x'.repeat(1000) } })
 
-      expect(screen.getByText('5000/5000')).toBeInTheDocument()
-      const counter = screen.getByText('5000/5000')
+      expect(screen.getByText('1000/1000')).toBeInTheDocument()
+      const counter = screen.getByText('1000/1000')
       expect(counter.className).toContain('text-amber-500')
     })
   })
@@ -2148,7 +2099,6 @@ describe('NewProjectPage', () => {
         deploy_error: null,
         max_parallel_tasks: null,
         auto_improve: false,
-        github_app_connected: true,
         created_at: '2026-03-01T00:00:00Z',
       })
 
@@ -2168,10 +2118,10 @@ describe('NewProjectPage', () => {
       expect(screen.getByText('My existing app')).toBeInTheDocument()
 
       // Fill in vision ("Scale it to millions" = 20 chars)
-      fireEvent.change(screen.getByPlaceholderText(/What do you want .+ to become/), {
+      fireEvent.change(screen.getByPlaceholderText(/A fast, minimal CLI tool/), {
         target: { value: 'Scale it to millions' },
       })
-      expect(screen.getByText('20/5000')).toBeInTheDocument()
+      expect(screen.getByText('20/1000')).toBeInTheDocument()
 
       // Step 3: Create project
       fireEvent.click(screen.getByText('Create Project'))
@@ -2209,7 +2159,6 @@ describe('NewProjectPage', () => {
         deploy_error: null,
         max_parallel_tasks: null,
         auto_improve: false,
-        github_app_connected: true,
         created_at: '2026-03-01T00:00:00Z',
       })
 
@@ -2227,7 +2176,7 @@ describe('NewProjectPage', () => {
       })
 
       // Type vision
-      fireEvent.change(screen.getByPlaceholderText(/What do you want .+ to become/), {
+      fireEvent.change(screen.getByPlaceholderText(/A fast, minimal CLI tool/), {
         target: { value: 'Community-driven' },
       })
 
@@ -2292,7 +2241,6 @@ describe('NewProjectPage', () => {
         deploy_error: null,
         max_parallel_tasks: null,
         auto_improve: false,
-        github_app_connected: true,
         created_at: '2026-03-01T00:00:00Z',
       })
 
@@ -2337,7 +2285,7 @@ describe('NewProjectPage', () => {
         expect(screen.getByText('Define your vision')).toBeInTheDocument()
       })
 
-      fireEvent.change(screen.getByPlaceholderText(/What do you want .+ to become/), {
+      fireEvent.change(screen.getByPlaceholderText(/A fast, minimal CLI tool/), {
         target: { value: 'Fully open source' },
       })
 
