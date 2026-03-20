@@ -689,11 +689,11 @@ describe('ProjectSettingsPage', () => {
       render(<ProjectSettingsPage />)
 
       await waitFor(() => {
-        expect(screen.getByText('16/1000')).toBeInTheDocument()
+        expect(screen.getByText('16/5000')).toBeInTheDocument()
       })
     })
 
-    it('truncates vision to 1000 characters', async () => {
+    it('truncates vision to 5000 characters', async () => {
       setupSuccessfulLoad({ project: { vision: '' } })
       render(<ProjectSettingsPage />)
 
@@ -701,12 +701,12 @@ describe('ProjectSettingsPage', () => {
         expect(screen.getByLabelText('Vision')).toBeInTheDocument()
       })
 
-      const longText = 'a'.repeat(1100)
+      const longText = 'a'.repeat(5500)
       const visionInput = screen.getByLabelText('Vision') as HTMLTextAreaElement
       fireEvent.change(visionInput, { target: { value: longText } })
 
-      // The onChange handler slices to 1000
-      expect(visionInput.value).toBe('a'.repeat(1000))
+      // The onChange handler slices to 5000
+      expect(visionInput.value).toBe('a'.repeat(5000))
     })
   })
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import {
   streamTaskEvents,
@@ -13,41 +13,495 @@ import {
   type QueueStatus,
   type Sponsorship,
 } from '@/lib/api'
+import { formatToolName, formatToolArgs, truncateMiddle } from '@/lib/utils'
 
-// ── Types ───────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────
 
-interface FileEntry {
-  path: string
-  content: string
-  language: string
-  action: 'read' | 'write' | 'edit'
-  timestamp: number
-}
+/**
+ * Expand a turn record (from DB replay) into granular events that the
+ * existing groupEvents/rendering logic expects. Live streaming still sends
+ * granular events directly — this bridges the two formats.
+ */
+function expandTurnRecord(turn: Record<string, unknown>): Record<string, unknown>[] {
+  const events: Record<string, unknown>[] = []
+  const turnNum = turn.turn as number
 
-type WorkspaceTab = 'activity' | 'files' | 'terminal'
+  // turn_start
+  events.push({ type: 'turn_start', turn: turnNum, agent: turn.agent })
 
-// ── Helpers ─────────────────────────────────────────────────────
-
-function detectLanguage(path: string): string {
-  const ext = path.split('.').pop()?.toLowerCase() || ''
-  const map: Record<string, string> = {
-    ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-    py: 'python', rs: 'rust', go: 'go', rb: 'ruby',
-    json: 'json', yaml: 'yaml', yml: 'yaml', toml: 'toml',
-    md: 'markdown', css: 'css', scss: 'scss', html: 'html',
-    sql: 'sql', sh: 'bash', bash: 'bash', zsh: 'bash',
-    dockerfile: 'dockerfile', makefile: 'makefile',
+  // thinking
+  if (turn.thinking) {
+    events.push({ type: 'thinking', turn: turnNum, text: turn.thinking, agent: turn.agent })
   }
-  return map[ext] || 'plaintext'
+
+  // agent_text
+  if (turn.text) {
+    events.push({ type: 'agent_text', turn: turnNum, text: turn.text, agent: turn.agent })
+  }
+
+  // tool_calls and their results
+  const toolCalls = (turn.tool_calls as Array<Record<string, unknown>>) || []
+  for (const tc of toolCalls) {
+    events.push({
+      type: 'tool_call',
+      turn: turnNum,
+      tool: tc.name,
+      input: tc.input,
+      agent: turn.agent,
+    })
+    events.push({
+      type: 'tool_result',
+      turn: turnNum,
+      tool: tc.name,
+      result: tc.result,
+      agent: turn.agent,
+    })
+  }
+
+  return events
 }
 
-function truncateMiddle(s: string, max: number): string {
-  if (s.length <= max) return s
-  const half = Math.floor((max - 3) / 2)
-  return s.slice(0, half) + '...' + s.slice(-half)
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  if (m === 0) return `${s}s`
+  return `${m}m ${s.toString().padStart(2, '0')}s`
 }
 
-// ── Main component ──────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────
+
+interface ToolCallInfo {
+  tool: string
+  input: Record<string, unknown>
+  completed: boolean
+  result: string | null
+  output: string | null
+  startedAt: number  // Date.now() when this tool_call event arrived
+}
+
+interface StatusEvent {
+  type: string
+  text: string
+  color: string
+  children?: StatusEvent[]
+}
+
+interface TurnGroup {
+  text: string | null
+  thinking: string | null
+  agent: 'coder' | 'reviewer'  // which agent produced this turn's text
+  tools: ToolCallInfo[]
+  status: StatusEvent[]
+}
+
+// ── Helpers ──────────────────────────────────────────────────
+
+export function groupEvents(events: TaskStreamEvent[]): TurnGroup[] {
+  const groups: TurnGroup[] = []
+  let current: TurnGroup = { text: null, thinking: null, agent: 'coder', tools: [], status: [] }
+  // Track which tool_result/tool_output indices have been claimed by a tool_call
+  const claimedResults = new Set<number>()
+
+  const pushCurrent = () => {
+    if (current.text || current.thinking || current.tools.length > 0 || current.status.length > 0) {
+      groups.push(current)
+    }
+  }
+
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i]
+    switch (ev.type) {
+      case 'turn_start':
+        pushCurrent()
+        current = { text: null, thinking: null, agent: ev.agent as 'coder' | 'reviewer', tools: [], status: [] }
+        break
+      case 'thinking': {
+        const thinkAgent = ev.agent as 'coder' | 'reviewer'
+        if (thinkAgent !== current.agent && (current.text || current.tools.length > 0)) {
+          pushCurrent()
+          current = { text: null, thinking: null, agent: thinkAgent, tools: [], status: [] }
+        }
+        current.agent = thinkAgent
+        current.thinking = (current.thinking || '') + (ev.text || '')
+        break
+      }
+      case 'agent_text': {
+        const textAgent = ev.agent as 'coder' | 'reviewer'
+        // Agent switch — start a new group
+        if (textAgent !== current.agent && (current.text || current.tools.length > 0)) {
+          pushCurrent()
+          current = { text: null, thinking: null, agent: textAgent, tools: [], status: [] }
+        }
+        current.agent = textAgent
+        current.text = (current.text || '') + (ev.text || '')
+        break
+      }
+      case 'tool_call': {
+        const toolName = ev.tool || ''
+        const evAgent = ev.agent as 'coder' | 'reviewer'
+
+        // Agent switch — start a new group
+        if (evAgent !== current.agent && (current.text || current.tools.length > 0)) {
+          pushCurrent()
+          current = { text: null, thinking: null, agent: evAgent, tools: [], status: [] }
+        } else if (evAgent !== current.agent) {
+          current.agent = evAgent
+        }
+
+        // TaskStop resolves the pending TaskOutput — don't render as its own line
+        if (toolName === 'TaskStop') {
+          const pending = current.tools.find(t => t.tool === 'TaskOutput' && !t.completed)
+          if (pending) pending.completed = true
+          break
+        }
+
+        let result: string | null = null
+        let output: string | null = null
+        let completed = false
+        for (let j = i + 1; j < events.length; j++) {
+          if (events[j].type === 'tool_result' && events[j].tool === toolName && !claimedResults.has(j)) {
+            result = events[j].result || null
+            completed = true
+            claimedResults.add(j)
+            break
+          }
+          if (events[j].type === 'tool_output' && events[j].tool === toolName && !claimedResults.has(j)) {
+            output = (output || '') + (events[j].output || '')
+            claimedResults.add(j)
+          }
+        }
+
+        // TaskOutput is also resolved by a subsequent TaskStop tool_call
+        if (toolName === 'TaskOutput' && !completed) {
+          for (let j = i + 1; j < events.length; j++) {
+            if (events[j].type === 'tool_call' && events[j].tool === 'TaskStop') {
+              completed = true
+              claimedResults.add(j)
+              break
+            }
+          }
+        }
+
+        current.tools.push({
+          tool: toolName,
+          input: (ev.input as Record<string, unknown>) || {},
+          completed,
+          result,
+          output,
+          startedAt: Date.now(),
+        })
+        break
+      }
+      case 'guidance':
+        current.status.push({ type: 'guidance', text: `You: ${ev.message || 'guidance sent'}`, color: 'text-blue-400' })
+        break
+      case 'guidance_received':
+        current.status.push({ type: 'guidance_received', text: 'Guidance received', color: 'text-blue-400' })
+        break
+      case 'pause_requested':
+        current.status.push({ type: 'pause_requested', text: 'Pause requested...', color: 'text-amber-400' })
+        break
+      case 'paused':
+        current.status.push({ type: 'paused', text: 'Task paused', color: 'text-amber-400' })
+        break
+      case 'resumed':
+        current.status.push({ type: 'resumed', text: 'Task resumed', color: 'text-green-400' })
+        break
+      case 'reviewing':
+        current.status.push({
+          type: 'review_parent',
+          text: 'Waiting for Code Review',
+          color: 'text-blue-400',
+          children: [],
+        })
+        break
+      case 'review_stage': {
+        const stage = ev.stage
+        const parent = current.status.find(s => s.type === 'review_parent')
+        if (stage === 'running_tests' && parent?.children) {
+          parent.children.push({ type: 'running_tests', text: 'Running tests', color: 'text-blue-400' })
+        } else if (stage === 'code_review' && parent?.children) {
+          // Tests done → mark solid, reviewing code starts
+          const tests = parent.children.find(c => c.type === 'running_tests')
+          if (tests) tests.type = 'running_tests_done'
+          parent.children.push({ type: 'reviewing_code', text: 'Reviewing code', color: 'text-blue-400' })
+        }
+        break
+      }
+      case 'deploying': {
+        const parent = current.status.find(s => s.type === 'review_parent')
+        if (parent) {
+          parent.type = 'review_done'
+          if (parent.children) {
+            for (const child of parent.children) {
+              if (child.type === 'running_tests') child.type = 'running_tests_done'
+              if (child.type === 'reviewing_code') child.type = 'reviewing_code_done'
+            }
+          }
+        }
+        current.status.push({ type: 'deploying', text: 'Deploying', color: 'text-blue-400' })
+        break
+      }
+      case 'complete': {
+        // Mark deploying as done
+        const dep = current.status.find(s => s.type === 'deploying')
+        if (dep) dep.type = 'deploying_done'
+        pushCurrent()
+        groups.push({
+          text: null,
+          thinking: null,
+          agent: 'coder',
+          tools: [],
+          status: [{ type: 'complete', text: ev.status || 'Complete', color: 'text-green-400' }],
+        })
+        current = { text: null, thinking: null, agent: 'coder', tools: [], status: [] }
+        break
+      }
+      // connected, tool_result, tool_output, stream_end — handled elsewhere or absorbed by tool_call processing
+    }
+  }
+
+  pushCurrent()
+  return groups
+}
+
+export function getToolSummary(tool: string, input: Record<string, unknown>): string {
+  const name = formatToolName(tool)
+  const filePath = (input.file_path || input.path) as string | undefined
+  const shortPath = filePath ? filePath.replace(/^\//, '') : null
+
+  switch (tool) {
+    case 'Edit':
+    case 'edit_file':
+      return shortPath ? `${name} ${shortPath}` : name
+    case 'Write':
+    case 'write_file':
+      return shortPath ? `${name} ${shortPath}` : name
+    case 'Read':
+    case 'read_file':
+      return shortPath ? `${name} ${shortPath}` : name
+    case 'Bash':
+    case 'bash': {
+      if (input.run_in_background) {
+        const desc = input.description as string | undefined
+        return desc ? `Background: ${desc}` : 'Running background task'
+      }
+      const desc = input.description as string | undefined
+      if (desc) return desc
+      const cmd = input.command as string | undefined
+      return cmd ? truncateMiddle(cmd.split('\n')[0], 80) : name
+    }
+    case 'TaskOutput':
+      return 'Waiting for background task'
+    case 'TodoWrite':
+      return 'Updated tasks'
+    case 'Grep':
+    case 'search_code': {
+      const pattern = input.pattern as string | undefined
+      return pattern ? `${name} "${truncateMiddle(pattern, 40)}"` : name
+    }
+    case 'Glob': {
+      const globPattern = input.pattern as string | undefined
+      return globPattern ? `${name} ${truncateMiddle(globPattern, 40)}` : name
+    }
+    case 'Agent': {
+      const desc = input.description as string | undefined
+      return desc ? `Spawn sub-agent: ${desc}` : 'Spawn sub-agent'
+    }
+    default: {
+      const args = formatToolArgs(input)
+      return args ? `${name}: ${args}` : name
+    }
+  }
+}
+
+function isEditTool(tool: string): boolean {
+  return tool === 'Edit' || tool === 'edit_file'
+}
+
+function isWriteTool(tool: string): boolean {
+  return tool === 'Write' || tool === 'write_file'
+}
+
+// ── Subcomponents ────────────────────────────────────────────
+
+/**
+ * Simple LCS-based line diff that interleaves removed/added lines at the
+ * right positions instead of dumping all reds then all greens.
+ */
+export function diffLines(oldLines: string[], newLines: string[]): { type: 'same' | 'del' | 'add'; text: string }[] {
+  const m = oldLines.length
+  const n = newLines.length
+
+  // Build LCS table
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = oldLines[i - 1] === newLines[j - 1]
+        ? dp[i - 1][j - 1] + 1
+        : Math.max(dp[i - 1][j], dp[i][j - 1])
+    }
+  }
+
+  // Backtrack to produce diff
+  const result: { type: 'same' | 'del' | 'add'; text: string }[] = []
+  let i = m, j = n
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+      result.push({ type: 'same', text: oldLines[i - 1] })
+      i--; j--
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      result.push({ type: 'add', text: newLines[j - 1] })
+      j--
+    } else {
+      result.push({ type: 'del', text: oldLines[i - 1] })
+      i--
+    }
+  }
+  result.reverse()
+  return result
+}
+
+function EditDiff({ oldStr, newStr }: { oldStr: string; newStr: string }) {
+  const lines = diffLines(oldStr.split('\n'), newStr.split('\n'))
+  return (
+    <div className="mt-1 rounded-md overflow-hidden border border-gray-800 text-[11px] font-mono max-h-48 overflow-y-auto">
+      {lines.map((line, i) => {
+        if (line.type === 'del') {
+          return (
+            <div key={i} className="px-2 bg-red-950/30 text-red-400/80">
+              <span className="select-none text-red-600/50 mr-1">-</span>{line.text}
+            </div>
+          )
+        }
+        if (line.type === 'add') {
+          return (
+            <div key={i} className="px-2 bg-green-950/30 text-green-400/80">
+              <span className="select-none text-green-600/50 mr-1">+</span>{line.text}
+            </div>
+          )
+        }
+        return (
+          <div key={i} className="px-2 text-gray-600">
+            <span className="select-none text-gray-700 mr-1">&nbsp;</span>{line.text}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function WritePreview({ content }: { content: string }) {
+  const allLines = content.split('\n')
+  const lines = allLines.slice(0, 20)
+  const truncated = allLines.length > 20
+  return (
+    <div className="mt-1 rounded-md overflow-hidden border border-gray-800 text-[11px] font-mono max-h-48 overflow-y-auto">
+      {lines.map((line, i) => (
+        <div key={i} className="px-2 bg-green-950/20 text-green-400/70">
+          <span className="select-none text-green-600/50 mr-1">+</span>{line}
+        </div>
+      ))}
+      {truncated && (
+        <div className="px-2 py-1 text-gray-600 text-[10px]">
+          ...{allLines.length - 20} more lines
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ToolCallRow({
+  tc,
+  expanded,
+  onToggle,
+  isRunning,
+  now,
+  agent,
+}: {
+  tc: ToolCallInfo
+  expanded: boolean
+  onToggle: () => void
+  isRunning: boolean
+  now: number
+  agent: 'coder' | 'reviewer'
+}) {
+  const summary = getToolSummary(tc.tool, tc.input)
+  const isEdit = isEditTool(tc.tool)
+  const isWrite = isWriteTool(tc.tool)
+  const elapsedMs = now - tc.startedAt
+  const showDuration = isRunning && elapsedMs >= 1000
+
+  // Determine what to show when expanded
+  const hasEditDiff = isEdit && !!tc.input.old_string && !!tc.input.new_string
+  const hasWriteContent = isWrite && !!tc.input.content
+  const rawOutput = tc.result || tc.output || ''
+  const hasRawOutput = rawOutput.length > 0
+  const hideOutput = ['Read', 'read_file', 'Glob', 'TodoWrite', 'Agent'].includes(tc.tool)
+  const isExpandable = hasEditDiff || hasWriteContent || (hasRawOutput && !hideOutput)
+
+  const dotColor = agent === 'reviewer' ? 'bg-blue-400' : 'bg-green-400'
+
+  return (
+    <div className="ml-3">
+      <div
+        className={`flex items-start py-0.5 ${isExpandable ? 'cursor-pointer hover:bg-gray-900/50 -mx-1 px-1 rounded' : ''}`}
+        onClick={() => { if (isExpandable) onToggle() }}
+      >
+        <span className="mr-2 inline-block w-3 shrink-0">
+          <span className={`inline-block w-1.5 h-1.5 rounded-full ${dotColor} ${isRunning ? 'animate-pulse' : ''}`} />
+        </span>
+        <span className="break-words min-w-0 text-gray-300">
+          {summary}
+        </span>
+        {showDuration && (
+          <span className="text-gray-600 ml-2 shrink-0 tabular-nums">
+            {formatElapsed(Math.floor(elapsedMs / 1000))}
+          </span>
+        )}
+        {isExpandable && (
+          <span className="text-gray-600 ml-2 shrink-0">
+            {expanded ? '\u25bc' : '\u25b6'}
+          </span>
+        )}
+      </div>
+
+      {expanded && hasEditDiff && (
+        <div className="ml-5">
+          <EditDiff
+            oldStr={tc.input.old_string as string}
+            newStr={tc.input.new_string as string}
+          />
+        </div>
+      )}
+
+      {expanded && hasWriteContent && (
+        <div className="ml-5">
+          <WritePreview content={tc.input.content as string} />
+        </div>
+      )}
+
+      {expanded && !hasEditDiff && !hasWriteContent && hasRawOutput && (
+        <div className="ml-5 mt-1 mb-2 p-2 rounded-md max-h-40 overflow-auto whitespace-pre-wrap break-words bg-gray-900 text-gray-400 border border-gray-800 text-[11px]">
+          {tc.result || tc.output}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const stepLabels: Record<string, string> = {
+  setup_started: 'Setting up workspace...',
+  setup_cloning: 'Cloning repository...',
+  setup_cloned: 'Repository cloned',
+  setup_deps: 'Installing dependencies...',
+  setup_deps_done: 'Dependencies installed',
+  runtime_created: 'Creating runtime...',
+  agent_started: 'Starting agent...',
+  agent_thinking: 'Agent is thinking...',
+}
+
+// ── Main component ──────────────────────────────────────────
 
 export default function AgentWorkspace({
   queueStatus,
@@ -70,13 +524,11 @@ export default function AgentWorkspace({
   const [streamError, setStreamError] = useState<string | null>(null)
   const streamingRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
+  const lastTaskIdRef = useRef<string | null>(null)
 
   // UI state
   const [expanded, setExpanded] = useState(false)
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>('activity')
-  const [selectedFile, setSelectedFile] = useState<FileEntry | null>(null)
-  const [files, setFiles] = useState<FileEntry[]>([])
-  const [terminalLines, setTerminalLines] = useState<Array<{ command: string; output: string; running: boolean }>>([])
+  const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set())
 
   // Control state
   const [cancelling, setCancelling] = useState(false)
@@ -84,150 +536,126 @@ export default function AgentWorkspace({
   const [resuming, setResuming] = useState(false)
   const [guidanceText, setGuidanceText] = useState('')
   const [sendingGuidance, setSendingGuidance] = useState(false)
-  const [expandedResults, setExpandedResults] = useState<Set<number>>(new Set())
+
+  // Track when the stream says the task is done
+  const [streamEnded, setStreamEnded] = useState(false)
+
+  // Lifecycle init steps (before turns start)
+  const [initSteps, setInitSteps] = useState<Array<{event: string, message: string, done: boolean}>>([])
+
+  // Running clock for tool durations
+  const [now, setNow] = useState(Date.now())
 
   // Refs
   const activityRef = useRef<HTMLDivElement>(null)
-  const terminalRef = useRef<HTMLDivElement>(null)
 
-  const isCurrentTaskForThisProject = queueStatus.current_task?.project_id === projectId
-  const currentTaskId = isCurrentTaskForThisProject ? queueStatus.current_task?.id : (pausedTask?.id || undefined)
-  const currentTask = isCurrentTaskForThisProject ? queueStatus.current_task : (pausedTask ? { id: pausedTask.id, title: pausedTask.title, project_id: pausedTask.project_id } : null)
+  // Find active task for this project — check active_tasks first (supports concurrent tasks),
+  // fall back to current_task for backwards compatibility
+  const activeTaskForProject = queueStatus.active_tasks?.find(t => t.project_id === projectId) || null
+  const isCurrentTaskForThisProject = activeTaskForProject !== null || queueStatus.current_task?.project_id === projectId
+  const currentTaskId = activeTaskForProject?.id || (isCurrentTaskForThisProject ? queueStatus.current_task?.id : undefined) || (pausedTask?.id || undefined)
+  const currentTask = activeTaskForProject || (queueStatus.current_task?.project_id === projectId ? queueStatus.current_task : null) || (pausedTask ? { id: pausedTask.id, title: pausedTask.title, project_id: pausedTask.project_id, started_at: pausedTask.started_at } : null)
   const isPaused = pausedTask !== null && !isCurrentTaskForThisProject
 
-  // Auto-scroll activity log
+  // Auto-scroll activity log only if user is near the bottom
+  const isNearBottomRef = useRef(true)
   useEffect(() => {
-    if (activityRef.current && activeTab === 'activity') {
+    if (activityRef.current && isNearBottomRef.current) {
       activityRef.current.scrollTop = activityRef.current.scrollHeight
     }
-  }, [events, activeTab])
+  }, [events])
 
-  // Auto-scroll terminal
+  const handleActivityScroll = () => {
+    const el = activityRef.current
+    if (!el) return
+    // "Near bottom" = within 40px of the bottom edge
+    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+  }
+
+  // 1-second clock tick for running time and tool durations
   useEffect(() => {
-    if (terminalRef.current && activeTab === 'terminal') {
-      terminalRef.current.scrollTop = terminalRef.current.scrollHeight
-    }
-  }, [terminalLines, activeTab])
+    if (!streaming) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [streaming])
 
-  // Process events into files and terminal data
-  const processEvent = useCallback((event: TaskStreamEvent) => {
-    // Track file operations
-    if (event.type === 'tool_call' && event.input) {
-      const input = event.input as Record<string, unknown>
-      const tool = event.tool || ''
+  // Group events into turns
+  const turnGroups = useMemo(() => groupEvents(events), [events])
 
-      if (tool === 'read_file' && input.path) {
-        // Will be filled by tool_result
-      }
-      if (tool === 'bash' && input.command) {
-        setTerminalLines(prev => [...prev, {
-          command: String(input.command),
-          output: '',
-          running: true,
-        }])
-      }
-    }
-
-    if (event.type === 'tool_output' && event.tool === 'bash') {
-      setTerminalLines(prev => {
-        if (prev.length === 0) return prev
-        const updated = [...prev]
-        const last = updated[updated.length - 1]
-        updated[updated.length - 1] = {
-          ...last,
-          output: last.output + (event.output || '') + '\n',
-        }
-        return updated
-      })
-    }
-
-    if (event.type === 'tool_result') {
-      const tool = event.tool || ''
-
-      if (tool === 'bash') {
-        setTerminalLines(prev => {
-          if (prev.length === 0) return prev
-          const updated = [...prev]
-          const last = updated[updated.length - 1]
-          updated[updated.length - 1] = {
-            ...last,
-            output: last.output || event.result || '',
-            running: false,
-          }
-          return updated
-        })
-      }
-
-      if ((tool === 'read_file' || tool === 'write_file' || tool === 'edit_file') && event.result) {
-        // Extract file path from the preceding tool_call
-        setEvents(prev => {
-          // Find the matching tool_call
-          for (let i = prev.length - 1; i >= 0; i--) {
-            if (prev[i].type === 'tool_call' && prev[i].tool === tool) {
-              const input = prev[i].input as Record<string, unknown> | undefined
-              if (input?.path) {
-                const path = String(input.path)
-                const action = tool === 'read_file' ? 'read' as const : tool === 'write_file' ? 'write' as const : 'edit' as const
-                const entry: FileEntry = {
-                  path,
-                  content: event.result || '',
-                  language: detectLanguage(path),
-                  action,
-                  timestamp: Date.now(),
-                }
-                setFiles(prevFiles => {
-                  const existing = prevFiles.findIndex(f => f.path === path)
-                  if (existing >= 0) {
-                    const updated = [...prevFiles]
-                    updated[existing] = entry
-                    return updated
-                  }
-                  return [...prevFiles, entry]
-                })
-                setSelectedFile(entry)
-                if (activeTab === 'activity') {
-                  setActiveTab('files')
-                }
-              }
-              break
-            }
-          }
-          return prev
-        })
-      }
-    }
-  }, [activeTab])
-
-  // SSE connection
+  // Single SSE effect
   useEffect(() => {
+    if (currentTaskId !== lastTaskIdRef.current) {
+      abortRef.current?.abort()
+      streamingRef.current = false
+      setEvents([])
+      setExpandedTools(new Set())
+      setStreaming(false)
+      setStreamError(null)
+      setStreamEnded(false)
+      setInitSteps([])
+      lastTaskIdRef.current = currentTaskId || null
+    }
+
     if (expanded && currentTaskId && !streamingRef.current) {
+      console.log('[AgentWorkspace] starting SSE stream:', currentTaskId)
       streamingRef.current = true
       setStreaming(true)
-      setEvents([])
-      setFiles([])
-      setTerminalLines([])
-      setSelectedFile(null)
       setStreamError(null)
       abortRef.current = new AbortController()
 
       streamTaskEvents(
         currentTaskId,
         (event) => {
-          setEvents(prev => [...prev, event])
-          processEvent(event)
-          if (event.type === 'complete' || event.type === 'stream_end') {
+          if (event.type === 'connected') {
+            console.log('[AgentWorkspace] SSE connected:', currentTaskId)
+          } else if (event.type === 'complete' || event.type === 'stream_end') {
+            console.log('[AgentWorkspace] received', event.type, '— closing workspace:', event)
             streamingRef.current = false
             setStreaming(false)
+            setStreamEnded(true)
+            onTaskStateChanged()
           }
+
+          // Handle lifecycle events — track init steps separately
+          if (event.type === 'lifecycle') {
+            const eventName = event.event || 'unknown'
+            setInitSteps(prev => {
+              // Dedup by event name (SSE replay can resend lifecycle events)
+              if (prev.some(s => s.event === eventName)) return prev
+              const updated = prev.map(s => ({ ...s, done: true }))
+              const message = event.message || stepLabels[eventName] || eventName
+              updated.push({ event: eventName, message, done: false })
+              return updated
+            })
+            return
+          }
+
+          // Expand turn records (from DB replay) into granular events
+          if (event.type === 'turn') {
+            const expanded = expandTurnRecord(event as unknown as Record<string, unknown>)
+            setEvents(prev => [...prev, ...(expanded as unknown as TaskStreamEvent[])])
+            return
+          }
+
+          setEvents(prev => [...prev, event])
         },
         abortRef.current.signal,
         (error) => {
+          console.error('[AgentWorkspace] stream error:', error.message)
           streamingRef.current = false
           setStreamError(error.message)
           setStreaming(false)
-        }
+        },
+        () => {
+          console.warn('[AgentWorkspace] stream ended without complete event — refetching status')
+          streamingRef.current = false
+          setStreaming(false)
+          onTaskStateChanged()
+        },
       )
-    } else if (!expanded && streamingRef.current) {
+    }
+
+    if (!expanded && streamingRef.current) {
       abortRef.current?.abort()
       streamingRef.current = false
       setStreaming(false)
@@ -239,20 +667,7 @@ export default function AgentWorkspace({
         streamingRef.current = false
       }
     }
-  }, [expanded, currentTaskId, processEvent])
-
-  // Reset on task change
-  useEffect(() => {
-    abortRef.current?.abort()
-    streamingRef.current = false
-    setEvents([])
-    setFiles([])
-    setTerminalLines([])
-    setSelectedFile(null)
-    setExpandedResults(new Set())
-    setStreaming(false)
-    setActiveTab('activity')
-  }, [currentTaskId])
+  }, [expanded, currentTaskId, onTaskStateChanged])
 
   // ── Controls ────────────────────────────────────────────────
 
@@ -318,66 +733,21 @@ export default function AgentWorkspace({
     }
   }
 
-  // ── Event formatting ────────────────────────────────────────
-
-  const hasToolResult = (toolName: string, fromIndex: number) => {
-    for (let j = fromIndex + 1; j < events.length; j++) {
-      if (events[j].type === 'tool_result' && events[j].tool === toolName) return true
-    }
-    return false
-  }
-
-  const formatEvent = (event: TaskStreamEvent, index: number): { icon: string; text: string; color: string; isSpinner: boolean; hidden?: boolean } => {
-    switch (event.type) {
-      case 'connected':
-        return { icon: '', text: 'Connected', color: 'text-gray-400', isSpinner: false }
-      case 'turn_start':
-        return { icon: '', text: `Turn ${event.turn}/${event.max_turns}`, color: 'text-gray-400', isSpinner: false }
-      case 'agent_text':
-        return { icon: '', text: event.text || '', color: 'text-gray-300', isSpinner: false }
-      case 'tool_call': {
-        const toolName = event.tool || ''
-        let args = ''
-        if (event.input) {
-          const input = event.input as Record<string, unknown>
-          if (input.command) args = `: ${truncateMiddle(String(input.command), 80)}`
-          else if (input.path) args = `: ${input.path}`
-          else if (input.query) args = `: ${input.query}`
-          else if (input.title) args = `: ${input.title}`
-        }
-        const completed = hasToolResult(toolName, index)
-        return {
-          icon: completed ? '\u2713' : '',
-          text: `${toolName}${args}`,
-          color: completed ? 'text-gray-400' : 'text-gray-300',
-          isSpinner: !completed
-        }
-      }
-      case 'tool_result':
-        return { icon: '', text: '', color: '', isSpinner: false, hidden: true }
-      case 'tool_output':
-        return { icon: '', text: '', color: '', isSpinner: false, hidden: true }
-      case 'guidance':
-        return { icon: '\u2192', text: `You: ${event.message || 'guidance sent'}`, color: 'text-violet-400', isSpinner: false }
-      case 'guidance_received':
-        return { icon: '\u2713', text: 'Guidance received', color: 'text-violet-400', isSpinner: false }
-      case 'pause_requested':
-        return { icon: '\u23f8', text: 'Pause requested...', color: 'text-amber-400', isSpinner: false }
-      case 'paused':
-        return { icon: '\u23f8', text: 'Task paused', color: 'text-amber-400', isSpinner: false }
-      case 'resumed':
-        return { icon: '\u25b6', text: 'Task resumed', color: 'text-green-400', isSpinner: false }
-      case 'complete':
-        return { icon: '\u2713', text: event.status || 'Complete', color: 'text-green-400', isSpinner: false }
-      case 'stream_end':
-        return { icon: '', text: 'Done', color: 'text-gray-500', isSpinner: false }
-      default:
-        return { icon: '', text: '', color: 'text-gray-500', isSpinner: false }
-    }
+  const toggleToolExpanded = (key: string) => {
+    setExpandedTools(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
   }
 
   // ── No task state ───────────────────────────────────────────
 
+  if (streamEnded) {
+    console.log('[AgentWorkspace] render: returning null (streamEnded=true)')
+    return null
+  }
   if (!currentTask && projectQueuedCount === 0) return null
 
   if (!currentTask) {
@@ -394,8 +764,6 @@ export default function AgentWorkspace({
   }
 
   const isSponsored = activeSponsor !== null
-  const turnEvents = events.filter(e => e.type === 'turn_start')
-  const currentTurn = turnEvents.length > 0 ? turnEvents[turnEvents.length - 1] : null
 
   // ── Render ──────────────────────────────────────────────────
 
@@ -412,11 +780,6 @@ export default function AgentWorkspace({
             <span className={`text-sm font-medium ${isPaused ? 'text-amber-700' : 'text-white'}`}>
               {isPaused ? 'Paused' : 'Agent Workspace'}
             </span>
-            {currentTurn && !isPaused && (
-              <span className="text-xs text-gray-400 font-mono">
-                turn {currentTurn.turn}/{currentTurn.max_turns}
-              </span>
-            )}
             <span className={`text-xs ${isPaused ? 'text-amber-600' : 'text-gray-400'} truncate max-w-xs`}>
               {currentTask?.title}
             </span>
@@ -475,236 +838,122 @@ export default function AgentWorkspace({
         </div>
       </div>
 
-      {/* Workspace panels */}
+      {/* Activity panel */}
       {expanded && (
         <div className="bg-gray-950">
-          {/* Tab bar */}
-          <div className="flex items-center border-b border-gray-800 px-1">
-            {(['activity', 'files', 'terminal'] as WorkspaceTab[]).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 text-xs font-medium transition-colors relative ${
-                  activeTab === tab
-                    ? 'text-white'
-                    : 'text-gray-500 hover:text-gray-300'
-                }`}
-              >
-                <span className="flex items-center gap-1.5">
-                  {tab === 'activity' && (
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  )}
-                  {tab === 'files' && (
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  )}
-                  {tab === 'terminal' && (
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                  )}
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  {tab === 'files' && files.length > 0 && (
-                    <span className="bg-gray-800 text-gray-400 text-[10px] px-1.5 py-0.5 rounded-full">{files.length}</span>
-                  )}
-                  {tab === 'terminal' && terminalLines.some(l => l.running) && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                  )}
-                </span>
-                {activeTab === tab && (
-                  <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-white rounded-t" />
-                )}
-              </button>
-            ))}
-          </div>
-
-          {/* Content area */}
-          <div className="h-[400px] flex">
-            {/* Activity tab */}
-            {activeTab === 'activity' && (
-              <div className="flex-1 flex flex-col">
-                <div ref={activityRef} className="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-0.5">
-                  {events.length === 0 && (
-                    <div className={streamError ? 'text-red-400' : 'text-gray-600'}>
-                      {streamError ? `Error: ${streamError}` : streaming ? 'Connecting...' : 'No events yet'}
+          <div className="h-[400px] flex flex-col">
+            <div ref={activityRef} onScroll={handleActivityScroll} className="flex-1 overflow-y-auto p-4 font-mono text-xs space-y-3">
+              {turnGroups.length === 0 && (
+                <div className="flex items-start gap-2 text-sm px-3 py-2">
+                  {initSteps.length > 0 ? (
+                    <div className="space-y-1">
+                      {initSteps.map((step, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                            step.done ? 'bg-blue-400' : 'bg-blue-400 animate-pulse'
+                          }`} />
+                          <span className={step.done ? 'text-gray-500' : 'text-blue-400'}>
+                            {step.message}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : streaming ? (
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                      <span className="text-blue-400">Initializing agent workspace...</span>
+                    </div>
+                  ) : streamError ? (
+                    <div className="text-red-400">Error: {streamError}</div>
+                  ) : null}
+                </div>
+              )}
+              {turnGroups.map((group, gi) => (
+                <div key={gi}>
+                  {/* Thinking */}
+                  {group.thinking && (
+                    <div className="text-gray-500 text-xs leading-relaxed mb-1 italic border-l border-gray-700 pl-2">
+                      {group.thinking}
                     </div>
                   )}
-                  {events.map((event, i) => {
-                    const formatted = formatEvent(event, i)
-                    if (!formatted.text || formatted.hidden) return null
 
-                    // Collect tool output for expandable results
-                    let displayText = ''
-                    let isStreamingOutput = false
-                    if (event.type === 'tool_call' && event.tool) {
-                      let hasResult = false
-                      for (let j = i + 1; j < events.length; j++) {
-                        if (events[j].type === 'tool_result' && events[j].tool === event.tool) {
-                          displayText = events[j].result || ''
-                          hasResult = true
-                          break
-                        }
-                      }
-                      if (!hasResult) {
-                        const outputs: string[] = []
-                        for (let j = i + 1; j < events.length; j++) {
-                          if (events[j].type === 'tool_output' && events[j].tool === event.tool) {
-                            outputs.push(events[j].output || '')
-                          } else if (events[j].type === 'tool_call') break
-                        }
-                        if (outputs.length > 0) {
-                          displayText = outputs.join('\n')
-                          isStreamingOutput = true
-                        }
-                      }
-                    }
-                    const hasOutput = displayText.length > 0
-                    const isExpandable = event.type === 'tool_call' && (displayText.length > 80 || isStreamingOutput)
-                    const isResultExpanded = expandedResults.has(i) || isStreamingOutput
+                  {/* Agent message */}
+                  {group.text && (
+                    <div className="text-gray-300 text-xs leading-relaxed mb-1">
+                      <span className={group.agent === 'reviewer' ? 'text-blue-400 font-medium' : 'text-green-400 font-medium'}>
+                        {group.agent === 'reviewer' ? 'Reviewer: ' : 'Coder: '}
+                      </span>
+                      {group.text}
+                    </div>
+                  )}
 
+                  {/* Tool calls */}
+                  {group.tools.map((tc, ti) => {
+                    const key = `${gi}-${ti}`
                     return (
-                      <div key={i}>
-                        <div
-                          className={`flex items-start py-0.5 ${formatted.color} ${isExpandable ? 'cursor-pointer hover:bg-gray-900/50 -mx-1 px-1 rounded' : ''}`}
-                          onClick={() => {
-                            if (hasOutput) {
-                              setExpandedResults(prev => {
-                                const next = new Set(prev)
-                                if (next.has(i)) next.delete(i)
-                                else next.add(i)
-                                return next
-                              })
-                            }
-                          }}
-                        >
-                          {formatted.isSpinner ? (
+                      <ToolCallRow
+                        key={key}
+                        tc={tc}
+                        expanded={expandedTools.has(key)}
+                        onToggle={() => toggleToolExpanded(key)}
+                        isRunning={streaming && !tc.completed}
+                        now={now}
+                        agent={group.agent}
+                      />
+                    )
+                  })}
+
+                  {/* Status events */}
+                  {group.status.map((s, si) => {
+                    const isActive = s.type === 'review_parent' || s.type === 'deploying'
+                    const isDone = s.type === 'review_done' || s.type === 'deploying_done'
+                    return (
+                      <div key={`s-${gi}-${si}`}>
+                        <div className={`flex items-center py-0.5 ${s.color}`}>
+                          {isActive ? (
                             <span className="mr-2 inline-block w-3 shrink-0">
-                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
                             </span>
+                          ) : isDone || s.type === 'complete' ? (
+                            <span className="mr-2 inline-block w-3 shrink-0">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400" />
+                            </span>
+                          ) : s.type === 'guidance' ? (
+                            <span className="opacity-60 mr-2 w-3 shrink-0 text-center">{'\u2192'}</span>
+                          ) : s.type === 'paused' || s.type === 'pause_requested' ? (
+                            <span className="opacity-60 mr-2 w-3 shrink-0 text-center">{'\u23f8'}</span>
+                          ) : s.type === 'resumed' ? (
+                            <span className="opacity-60 mr-2 w-3 shrink-0 text-center">{'\u25b6'}</span>
                           ) : (
-                            <span className="opacity-60 mr-2 w-3 shrink-0 text-center">{formatted.icon}</span>
-                          )}
-                          <span className="break-words min-w-0">{formatted.text}</span>
-                          {hasOutput && (
-                            <span className="text-gray-600 ml-2 shrink-0">
-                              {isStreamingOutput ? '\u23f3' : isResultExpanded ? '\u25bc' : '\u25b6'}
+                            <span className="mr-2 inline-block w-3 shrink-0">
+                              <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400" />
                             </span>
                           )}
+                          <span>{s.text}</span>
                         </div>
-                        {hasOutput && isResultExpanded && (
-                          <div className="ml-5 mt-1 mb-2 p-2 rounded-md max-h-40 overflow-auto whitespace-pre-wrap break-words bg-gray-900 text-gray-400 border border-gray-800 text-[11px]">
-                            {displayText}
-                          </div>
-                        )}
+                        {s.children?.map((child, ci) => {
+                          const childActive = child.type === 'reviewing_code' || child.type === 'running_tests'
+                          return (
+                            <div key={`c-${gi}-${si}-${ci}`} className={`flex items-center py-0.5 ml-5 ${child.color}`}>
+                              {childActive ? (
+                                <span className="mr-2 inline-block w-3 shrink-0">
+                                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                                </span>
+                              ) : (
+                                <span className="mr-2 inline-block w-3 shrink-0">
+                                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                </span>
+                              )}
+                              <span>{child.text}</span>
+                            </div>
+                          )
+                        })}
                       </div>
                     )
                   })}
                 </div>
-              </div>
-            )}
-
-            {/* Files tab */}
-            {activeTab === 'files' && (
-              <div className="flex-1 flex">
-                {/* File list sidebar */}
-                <div className="w-48 border-r border-gray-800 overflow-y-auto shrink-0">
-                  {files.length === 0 ? (
-                    <div className="p-4 text-xs text-gray-600">No files yet</div>
-                  ) : (
-                    <div className="py-1">
-                      {files.map((file, i) => {
-                        const filename = file.path.split('/').pop() || file.path
-                        const isSelected = selectedFile?.path === file.path
-                        return (
-                          <button
-                            key={i}
-                            onClick={() => setSelectedFile(file)}
-                            className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
-                              isSelected ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-900'
-                            }`}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                              file.action === 'write' ? 'bg-green-500' :
-                              file.action === 'edit' ? 'bg-amber-500' :
-                              'bg-gray-600'
-                            }`} />
-                            <span className="truncate font-mono">{filename}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* File content viewer */}
-                <div className="flex-1 overflow-hidden flex flex-col">
-                  {selectedFile ? (
-                    <>
-                      <div className="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[10px] uppercase font-medium px-1.5 py-0.5 rounded ${
-                            selectedFile.action === 'write' ? 'bg-green-900/50 text-green-400' :
-                            selectedFile.action === 'edit' ? 'bg-amber-900/50 text-amber-400' :
-                            'bg-gray-800 text-gray-400'
-                          }`}>
-                            {selectedFile.action}
-                          </span>
-                          <span className="text-xs text-gray-300 font-mono">{selectedFile.path}</span>
-                        </div>
-                        <span className="text-[10px] text-gray-600">{selectedFile.language}</span>
-                      </div>
-                      <div className="flex-1 overflow-auto p-4">
-                        <pre className="text-xs font-mono text-gray-300 whitespace-pre-wrap break-words leading-relaxed">
-                          {selectedFile.content.split('\n').map((line, lineIdx) => (
-                            <div key={lineIdx} className="flex hover:bg-gray-900/50">
-                              <span className="text-gray-700 w-10 text-right pr-4 select-none shrink-0 tabular-nums">{lineIdx + 1}</span>
-                              <span className="flex-1 min-w-0">{line || ' '}</span>
-                            </div>
-                          ))}
-                        </pre>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex-1 flex items-center justify-center text-xs text-gray-600">
-                      {files.length > 0 ? 'Select a file' : 'Files will appear as the agent reads and writes them'}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Terminal tab */}
-            {activeTab === 'terminal' && (
-              <div className="flex-1 flex flex-col">
-                <div ref={terminalRef} className="flex-1 overflow-y-auto p-4 font-mono text-xs">
-                  {terminalLines.length === 0 ? (
-                    <div className="text-gray-600">Terminal output will appear when the agent runs commands</div>
-                  ) : (
-                    <div className="space-y-3">
-                      {terminalLines.map((line, i) => (
-                        <div key={i}>
-                          <div className="flex items-start gap-2">
-                            <span className="text-green-500 shrink-0">$</span>
-                            <span className="text-gray-200 break-all">{line.command}</span>
-                            {line.running && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse mt-1.5 shrink-0" />
-                            )}
-                          </div>
-                          {line.output && (
-                            <div className="mt-1 ml-4 text-gray-500 whitespace-pre-wrap break-words max-h-48 overflow-auto">
-                              {line.output}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
 
           {/* Guidance input */}

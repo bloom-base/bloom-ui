@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   const clientId = process.env.GITHUB_CLIENT_ID
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const redirectUri = `${appUrl}/api/auth/callback`
-  const scope = 'read:user user:email repo'
+  const scope = 'read:user user:email repo admin:public_key'
 
   if (!clientId) {
     return NextResponse.redirect(new URL('/?error=missing_github_client_id', appUrl))

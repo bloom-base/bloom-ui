@@ -17,65 +17,11 @@ body {
   }
 }
 
-/* ============================================================
-   Semantic color tokens
-   Space-separated RGB so Tailwind opacity modifiers work:
-   e.g. bg-canvas/80, text-ink/50
-   ============================================================ */
-
-:root {
-  /* Backgrounds */
-  --color-bg:           255 255 255; /* #ffffff */
-  --color-bg-subtle:    247 247 248; /* #f7f7f8 */
-  --color-bg-muted:     237 237 240; /* #ededf0 */
-
-  /* Surfaces (cards, panels) */
-  --color-surface:       255 255 255; /* #ffffff */
-  --color-surface-raised: 255 255 255; /* #ffffff — add shadow in component */
-
-  /* Borders */
-  --color-border:        228 228 231; /* #e4e4e7 */
-  --color-border-subtle: 240 240 242; /* #f0f0f2 */
-
-  /* Text */
-  --color-text:           24  24  27; /* #18181b */
-  --color-text-secondary: 113 113 122; /* #71717a */
-  --color-text-tertiary:  161 161 170; /* #a1a1aa */
-
-  /* Accent (violet) */
-  --color-accent:        139  92 246; /* #8b5cf6 */
-  --color-accent-hover:  124  58 237; /* #7c3aed */
-  --color-accent-subtle: 237 233 254; /* #ede9fe */
+/* Custom scrollbar - light theme */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d4d4d8 transparent;
 }
-
-html.dark {
-  /* Backgrounds — cool dark blue-gray, Linear-inspired, not pure black */
-  --color-bg:             11  11  16; /* #0b0b10 */
-  --color-bg-subtle:      17  17  23; /* #111117 */
-  --color-bg-muted:       24  24  31; /* #18181f */
-
-  /* Surfaces */
-  --color-surface:        17  17  23; /* #111117 */
-  --color-surface-raised: 26  26  36; /* #1a1a24 */
-
-  /* Borders */
-  --color-border:         38  38  47; /* #26262f */
-  --color-border-subtle:  30  30  39; /* #1e1e27 */
-
-  /* Text */
-  --color-text:           232 232 240; /* #e8e8f0 — off-white with cool tint */
-  --color-text-secondary: 126 126 154; /* #7e7e9a */
-  --color-text-tertiary:   82  82 106; /* #52526a */
-
-  /* Accent — slightly lighter violet for dark backgrounds */
-  --color-accent:        167 139 250; /* #a78bfa */
-  --color-accent-hover:  139  92 246; /* #8b5cf6 */
-  --color-accent-subtle:  30  24  48; /* #1e1830 */
-}
-
-/* ============================================================
-   Custom scrollbar
-   ============================================================ */
 
 ::-webkit-scrollbar {
   width: 8px;
@@ -87,53 +33,26 @@ html.dark {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgb(var(--color-border));
+  background: #d4d4d8;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--color-text-tertiary));
+  background: #a1a1aa;
 }
 
-/* ============================================================
-   Focus styles — accent color
-   ============================================================ */
-
+/* Focus styles - accent color */
 *:focus-visible {
-  outline: 2px solid rgb(var(--color-accent));
+  outline: 2px solid #8b5cf6;
   outline-offset: 2px;
 }
 
-/* ============================================================
-   Theme transitions — smooth switch
-   ============================================================ */
-
-html {
-  color-scheme: light;
-}
-
-html.dark {
-  color-scheme: dark;
-}
-
-html, body, * {
-  transition-property: background-color, border-color, color;
-  transition-duration: 0.15s;
-  transition-timing-function: ease;
-}
-
-/* ============================================================
-   Smooth element transitions
-   ============================================================ */
-
+/* Smooth transitions */
 button, a, input, textarea {
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
 
-/* ============================================================
-   Card hover effect
-   ============================================================ */
-
+/* Card hover effect */
 .card-hover {
   transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
 }
@@ -141,20 +60,4 @@ button, a, input, textarea {
 .card-hover:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-.dark .card-hover:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-}
-
-/* ============================================================
-   Theme toggle button animation
-   ============================================================ */
-
-.theme-toggle-icon {
-  transition: transform 0.2s ease, opacity 0.15s ease;
-}
-
-.theme-toggle-icon:hover {
-  transform: rotate(12deg);
 }

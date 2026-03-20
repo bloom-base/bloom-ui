@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useParams, useRouter, notFound } from 'next/navigation'
@@ -10,7 +10,9 @@ import SearchPanel from '@/components/SearchPanel'
 import EvalDashboard from '@/components/EvalDashboard'
 import AgentWorkspace from '@/components/AgentWorkspace'
 import DiffViewer from '@/components/DiffViewer'
+import { getToolSummary } from '@/components/AgentWorkspace'
 import { redirectToLogin } from '@/lib/auth'
+import { useUserEvent } from '@/lib/useUserEvents'
 
 const RESERVED_PATHS = ['explore', 'new', 'auth', 'api', 'projects', 'settings', '_next', 'favicon.ico', 'profile', 'pricing', 'admin', 'analytics', 'u', 'terms', 'privacy', 'notifications']
 
@@ -67,6 +69,14 @@ export default function ProjectPage() {
   }, [])
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('app_installed') === 'true') {
+      toast.success('GitHub App connected — AI agents can now work on this repo')
+      window.history.replaceState({}, '', `/${owner}/${repo}`)
+    }
+  }, [owner, repo])
+
+  useEffect(() => {
     if (RESERVED_PATHS.includes(owner.toLowerCase())) return
 
     getProjectByPath(owner, repo)
@@ -97,28 +107,8 @@ export default function ProjectPage() {
       .finally(() => setLoading(false))
   }, [owner, repo])
 
-  useEffect(() => {
-    if (!project) return
-    const shouldPoll = queueStatus?.current_task || (queueStatus?.total_pending && queueStatus.total_pending > 0)
-    if (!shouldPoll) return
-
-    const interval = setInterval(async () => {
-      try {
-        const [tRes, q, a] = await Promise.all([
-          getProjectLedger(project.id),
-          getQueueStatus(),
-          getProjectAnalytics(project.id).catch(() => null),
-        ])
-        setTasks(tRes.items)
-        setQueueStatus(q)
-        if (a) setAnalytics(a)
-      } catch (e) {
-        console.error(e)
-      }
-    }, 5000)
-
-    return () => clearInterval(interval)
-  }, [project, queueStatus?.current_task, queueStatus?.total_pending])
+  // No polling — task state changes come via SSE stream.
+  // onTaskStateChanged (passed to AgentWorkspace) triggers a one-time refetch.
 
   if (loading) {
     return (
@@ -171,7 +161,7 @@ export default function ProjectPage() {
   const queuedTasks = tasks.filter((t) => t.status === 'accepted' || t.status === 'proposed')
   const completedTasks = tasks
     .filter((t) => t.status === 'completed' || t.status === 'incomplete' || t.status === 'rejected' || t.status === 'cancelled')
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .sort((a, b) => new Date(b.completed_at || b.created_at).getTime() - new Date(a.completed_at || a.created_at).getTime())
 
   const basePath = `/${owner}/${repo}`
 
@@ -246,6 +236,22 @@ export default function ProjectPage() {
             </div>
           </div>
 
+          {/* GitHub App connection banner (owner-only) */}
+          {currentUser && project.owner_id === currentUser.id && !project.github_app_connected && (
+            <div className="mt-6 p-6 rounded-xl border border-amber-200 bg-amber-50">
+              <h3 className="text-sm font-medium text-gray-900 mb-1">Connect GitHub</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Install the Bloom app to let AI agents work on your repository.
+              </p>
+              <a
+                href="https://github.com/apps/bloom-base/installations/new"
+                className="inline-flex px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-colors"
+              >
+                Install Bloom App &rarr;
+              </a>
+            </div>
+          )}
+
           {/* Primary CTA */}
           <div className="mt-6 flex items-center gap-3">
             {isLoggedIn ? (
@@ -275,8 +281,8 @@ export default function ProjectPage() {
             >
               Governance
             </Link>
-            {/* Fork button: public projects, logged-in Pro users who don't own it */}
-            {project.is_public && currentUser && project.owner_id !== currentUser.id && currentUser.subscription_tier === 'pro' && (
+            {/* Fork button: public projects, logged-in Pro users (skip owner check for flagship bloom-base projects) */}
+            {project.is_public && currentUser && (project.github_repo?.startsWith('bloom-base/') || project.owner_id !== currentUser.id) && currentUser.subscription_tier === 'pro' && (
               <button
                 onClick={async () => {
                   try {
@@ -295,8 +301,8 @@ export default function ProjectPage() {
                 Fork
               </button>
             )}
-            {/* Follow button: public projects, not the owner */}
-            {project.is_public && followStatus && currentUser && project.owner_id !== currentUser.id && (
+            {/* Follow button: any logged-in user on public projects */}
+            {project.is_public && followStatus && currentUser && (
               <button
                 onClick={async () => {
                   setFollowLoading(true)
@@ -337,7 +343,7 @@ export default function ProjectPage() {
         )}
 
         {/* Vision + Stats row */}
-        {(project.vision || (analytics && (analytics.tasks.total > 0 || analytics.cost.total_cost_usd > 0)) || topContributors.length > 0) && (
+        {(project.vision || (analytics && (analytics.tasks.total > 0 || (analytics.cost?.total_cost_usd ?? 0) > 0)) || topContributors.length > 0) && (
           <div className="flex flex-col lg:flex-row gap-4 mb-10">
             {project.vision && (
               <div className="flex-1 p-5 rounded-xl bg-gray-50 border border-gray-100">
@@ -371,7 +377,7 @@ export default function ProjectPage() {
               </div>
             )}
 
-            {analytics && (analytics.tasks.total > 0 || analytics.cost.total_cost_usd > 0) && (
+            {analytics && (analytics.tasks.total > 0 || (analytics.cost?.total_cost_usd ?? 0) > 0) && (
               <div className="grid grid-cols-2 gap-3 shrink-0">
                 <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 min-w-[100px]">
                   <p className="text-xs text-gray-400">Tasks</p>
@@ -380,7 +386,7 @@ export default function ProjectPage() {
                 <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 min-w-[100px]">
                   <p className="text-xs text-gray-400">Last Task</p>
                   <p className="text-lg font-semibold text-gray-900">
-                    {analytics.cost.last_task_cost_usd != null ? `$${analytics.cost.last_task_cost_usd.toFixed(2)}` : '-'}
+                    {analytics.cost?.last_task_cost_usd != null ? `$${Number(analytics.cost.last_task_cost_usd).toFixed(2)}` : '-'}
                   </p>
                 </div>
                 <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 min-w-[100px]">
@@ -396,7 +402,7 @@ export default function ProjectPage() {
                 <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 min-w-[100px]">
                   <p className="text-xs text-gray-400">Total Cost</p>
                   <p className="text-lg font-semibold text-gray-900">
-                    ${analytics.cost.total_cost_usd.toFixed(2)}
+                    ${(Number(analytics.cost?.total_cost_usd) || 0).toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -416,6 +422,7 @@ export default function ProjectPage() {
               if (project) {
                 getProjectLedger(project.id).then(r => setTasks(r.items))
                 getQueueStatus().then(setQueueStatus)
+                getProjectAnalytics(project.id).then(a => { if (a) setAnalytics(a) }).catch(() => null)
               }
             }}
           />
@@ -533,58 +540,9 @@ export default function ProjectPage() {
           </section>
         </div>
 
-        {/* Deployment History */}
-        {deployments.length > 0 ? (
-          <section className="mb-10">
-            <h2 className="text-sm font-medium text-gray-900 mb-4">Deployments</h2>
-            <div className="space-y-2">
-              {deployments.slice(0, 5).map((d) => {
-                const statusColors: Record<string, string> = {
-                  deployed: 'bg-green-500',
-                  deploying: 'bg-gray-900 animate-pulse',
-                  failed: 'bg-red-400',
-                  pending: 'bg-gray-400',
-                  promoted: 'bg-green-500',
-                  testing: 'bg-amber-400',
-                }
-                const dateStr = d.deployed_at
-                  ? new Date(d.deployed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                  : new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                return (
-                  <div key={d.id} className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-100 rounded-xl">
-                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusColors[d.status] || 'bg-gray-300'}`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-900 font-medium capitalize">{d.status}</span>
-                        <span className="text-xs text-gray-400 font-mono">{d.commit_sha.slice(0, 7)}</span>
-                      </div>
-                      <div className="text-xs text-gray-500">{dateStr}</div>
-                    </div>
-                    {d.public_url && d.status === 'deployed' && (
-                      <a
-                        href={d.public_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-gray-500 hover:text-gray-900 underline underline-offset-2"
-                      >
-                        View
-                      </a>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-        ) : currentUser?.id === project.owner_id ? (
-          <section className="mb-10">
-            <h2 className="text-sm font-medium text-gray-900 mb-4">Deployments</h2>
-            <p className="text-sm text-gray-400">No deployments yet. Use the chat to ask the Maintainer to deploy your project.</p>
-          </section>
-        ) : null}
-
         {/* Recent Conversations */}
         {conversations.length > 0 && (
-          <section className="max-w-full overflow-hidden">
+          <section className="mb-10 max-w-full overflow-hidden">
             <h2 className="text-sm font-medium text-gray-900 mb-4">Recent Conversations</h2>
             <div className="space-y-2">
               {conversations.slice(0, 5).map((conv) => (
@@ -656,6 +614,55 @@ export default function ProjectPage() {
             <EvalDashboard projectId={project.id} />
           </section>
         )}
+
+        {/* Deployment History */}
+        {deployments.length > 0 ? (
+          <section className="mb-10">
+            <h2 className="text-sm font-medium text-gray-900 mb-4">Deployments</h2>
+            <div className="space-y-2">
+              {deployments.slice(0, 5).map((d) => {
+                const statusColors: Record<string, string> = {
+                  deployed: 'bg-green-500',
+                  deploying: 'bg-gray-900 animate-pulse',
+                  failed: 'bg-red-400',
+                  pending: 'bg-gray-400',
+                  promoted: 'bg-green-500',
+                  testing: 'bg-amber-400',
+                }
+                const dateStr = d.deployed_at
+                  ? new Date(d.deployed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                  : new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                return (
+                  <div key={d.id} className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-100 rounded-xl">
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusColors[d.status] || 'bg-gray-300'}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-900 font-medium capitalize">{d.status}</span>
+                        <span className="text-xs text-gray-400 font-mono">{d.commit_sha.slice(0, 7)}</span>
+                      </div>
+                      <div className="text-xs text-gray-500">{dateStr}</div>
+                    </div>
+                    {d.public_url && d.status === 'deployed' && (
+                      <a
+                        href={d.public_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-gray-500 hover:text-gray-900 underline underline-offset-2"
+                      >
+                        View
+                      </a>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        ) : currentUser?.id === project.owner_id ? (
+          <section className="mb-10">
+            <h2 className="text-sm font-medium text-gray-900 mb-4">Deployments</h2>
+            <p className="text-sm text-gray-400">No deployments yet. Use the chat to ask the Maintainer to deploy your project.</p>
+          </section>
+        ) : null}
       </div>
     </div>
   )
@@ -740,18 +747,11 @@ function TaskCard({ task, basePath }: { task: LedgerTask; basePath: string }) {
         return { icon: '', text: event.text || '', color: 'text-gray-700' }
       case 'tool_call': {
         const toolName = event.tool || ''
-        let args = ''
-        if (event.input) {
-          const input = event.input as Record<string, unknown>
-          if (input.command) args = `: ${String(input.command).slice(0, 60)}${String(input.command).length > 60 ? '...' : ''}`
-          else if (input.path) args = `: ${input.path}`
-          else if (input.query) args = `: ${input.query}`
-          else if (input.title) args = `: ${input.title}`
-        }
+        const input = (event.input || {}) as Record<string, unknown>
         const completed = hasToolResult(toolName, index)
         return {
           icon: completed ? '\u2713' : '\u2022',
-          text: `${toolName}${args}`,
+          text: getToolSummary(toolName, input),
           color: completed ? 'text-gray-600' : 'text-gray-500',
         }
       }
@@ -801,14 +801,6 @@ function TaskCard({ task, basePath }: { task: LedgerTask; basePath: string }) {
                 <a href={task.github_pr_url} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 underline underline-offset-2 hover:text-gray-900" onClick={(e) => e.stopPropagation()}>
                   PR
                 </a>
-                {prNum > 0 && (task.status === 'completed' || task.status === 'incomplete') && (
-                  <button
-                    className={`text-[10px] px-1.5 py-0.5 rounded ${diffPR === prNum ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'} transition-colors`}
-                    onClick={(e) => { e.stopPropagation(); loadDiff(prNum) }}
-                  >
-                    Diff
-                  </button>
-                )}
               </span>
             )
           })()}
@@ -871,12 +863,6 @@ function TaskCard({ task, basePath }: { task: LedgerTask; basePath: string }) {
                             {pr.is_final && (
                               <span className="text-[10px] text-gray-400">final</span>
                             )}
-                            <button
-                              className={`text-[10px] px-1.5 py-0.5 rounded ${diffPR === pr.pr_number ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'} transition-colors`}
-                              onClick={(e) => { e.stopPropagation(); loadDiff(pr.pr_number) }}
-                            >
-                              Diff
-                            </button>
                           </div>
                           {pr.done_summary && (
                             <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-1">{pr.done_summary}</p>
@@ -894,17 +880,17 @@ function TaskCard({ task, basePath }: { task: LedgerTask; basePath: string }) {
               {/* Cost & Quality */}
               {(taskCost || taskEval?.eval) && (
                 <div className="flex flex-wrap gap-3 mb-3">
-                  {taskCost && taskCost.total_cost_usd > 0 && (
+                  {taskCost && (Number(taskCost.total_cost_usd) || 0) > 0 && (
                     <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-50 border border-gray-100">
                       <span className="text-[10px] text-gray-400">Cost</span>
-                      <span className="text-xs font-medium text-gray-700">${taskCost.total_cost_usd.toFixed(3)}</span>
+                      <span className="text-xs font-medium text-gray-700">${Number(taskCost.total_cost_usd).toFixed(3)}</span>
                     </div>
                   )}
-                  {taskCost && (taskCost.total_input_tokens > 0 || taskCost.total_output_tokens > 0) && (
+                  {taskCost && ((taskCost.total_input_tokens || 0) > 0 || (taskCost.total_output_tokens || 0) > 0) && (
                     <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-gray-50 border border-gray-100">
                       <span className="text-[10px] text-gray-400">Tokens</span>
                       <span className="text-xs font-medium text-gray-700">
-                        {((taskCost.total_input_tokens + taskCost.total_output_tokens) / 1000).toFixed(1)}k
+                        {(((taskCost.total_input_tokens || 0) + (taskCost.total_output_tokens || 0)) / 1000).toFixed(1)}k
                       </span>
                     </div>
                   )}
@@ -1112,24 +1098,13 @@ function DeployButton({ project }: { project: Project }) {
     setError(project.deploy_error)
   }, [project.deploy_status, project.deployed_url, project.deploy_error])
 
-  useEffect(() => {
-    if (status !== 'deploying' && status !== 'pending') return
-
-    const interval = setInterval(async () => {
-      try {
-        const data = await getDeployStatus(project.id)
-        if (data.deploy_status !== status || data.deployed_url !== url) {
-          setStatus(data.deploy_status)
-          setUrl(data.deployed_url)
-          setError(data.deploy_error)
-        }
-      } catch {
-        // Ignore polling errors
-      }
-    }, 3000)
-
-    return () => clearInterval(interval)
-  }, [status, url, project.id])
+  // Listen for deploy status changes via user event stream
+  useUserEvent('deploy:status_changed', useCallback((event) => {
+    if (event.project_id !== project.id) return
+    if (event.status) setStatus(event.status as 'pending' | 'deploying' | 'deployed' | 'failed')
+    if (event.deployed_url) setUrl(event.deployed_url as string)
+    if (event.error) setError(event.error as string)
+  }, [project.id]))
 
   if (status === 'deploying' || status === 'pending') {
     return (

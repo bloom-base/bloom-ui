@@ -21,6 +21,64 @@ export function isPasswordStrong(password: string): boolean {
 }
 
 /**
+ * Truncate a string in the middle, preserving start and end.
+ */
+export function truncateMiddle(s: string, max: number): string {
+  if (s.length <= max) return s
+  const half = Math.floor((max - 3) / 2)
+  return s.slice(0, half) + '...' + s.slice(-half)
+}
+
+/**
+ * Clean up raw tool names for display.
+ * e.g. mcp__bloom__create_pr → "Create PR", read_file → "Read"
+ */
+export function formatToolName(raw: string): string {
+  // Strip MCP namespace prefix
+  let name = raw.replace(/^mcp__[\w-]+__/, '')
+
+  const aliases: Record<string, string> = {
+    create_pr: 'Create PR',
+    request_review: 'Request Review',
+    report_issue: 'Report Issue',
+    ask_maintainer: 'Ask Maintainer',
+    task_complete: 'Task Complete',
+    get_pr_comments: 'PR Comments',
+    reply_to_comment: 'Reply to Comment',
+    get_knowledge: 'Get Knowledge',
+    save_knowledge: 'Save Knowledge',
+    get_code_context: 'Code Context',
+    search_project: 'Search Project',
+    get_active_work: 'Active Work',
+    approve_and_merge: 'Approve & Merge',
+    request_changes: 'Request Changes',
+  }
+
+  if (aliases[name]) return aliases[name]
+
+  // Generic: snake_case → Title Case
+  return name
+    .split('_')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ')
+}
+
+/**
+ * Format all tool input parameters for display.
+ * Shows every parameter as key=value, truncating long values.
+ */
+export function formatToolArgs(input: Record<string, unknown> | undefined): string {
+  if (!input) return ''
+  const parts: string[] = []
+  for (const [key, val] of Object.entries(input)) {
+    if (val === undefined || val === null || val === '') continue
+    const str = typeof val === 'string' ? val : JSON.stringify(val)
+    parts.push(`${key}=${truncateMiddle(str, 60)}`)
+  }
+  return parts.join(', ')
+}
+
+/**
  * Convert an ISO date string to a human-readable relative time.
  *
  * Examples: "just now", "5m ago", "3h ago", "2d ago", "1w ago", "3mo ago", "1y ago"
