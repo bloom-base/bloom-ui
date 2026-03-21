@@ -42,6 +42,7 @@ export default function ProjectPage() {
   const [ideaContributors, setIdeaContributors] = useState<ProjectContributor[]>([])
   const [deployments, setDeployments] = useState<DeploymentHistoryItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [showAllCompleted, setShowAllCompleted] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
@@ -69,11 +70,12 @@ export default function ProjectPage() {
   useEffect(() => {
     if (RESERVED_PATHS.includes(owner.toLowerCase())) return
 
+    setLoadError(null)
     getProjectByPath(owner, repo)
       .then(async (p) => {
         setProject(p)
         const [tRes, c, q, a, sponsor, sponsorsRes, contribs, deploysRes, follow] = await Promise.all([
-          getProjectLedger(p.id),
+          getProjectLedger(p.id).catch(() => ({ items: [], total: 0, limit: 50, offset: 0 })),
           listConversations(p.id).then(r => r.items).catch(() => []),
           getQueueStatus().catch(() => null),
           getProjectAnalytics(p.id).catch(() => null),
@@ -93,7 +95,10 @@ export default function ProjectPage() {
         setDeployments(deploysRes.items)
         if (follow) setFollowStatus(follow)
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error('Failed to load project:', err)
+        setLoadError(err instanceof Error ? err.message : 'Failed to load project')
+      })
       .finally(() => setLoading(false))
   }, [owner, repo])
 
@@ -146,11 +151,19 @@ export default function ProjectPage() {
   }
 
   if (!project) {
+    const isNetworkError = loadError && !loadError.toLowerCase().includes('not found') && !loadError.toLowerCase().includes('404')
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-900 font-medium mb-1">Project not found</p>
-          <p className="text-gray-500 text-sm mb-6">This project doesn&apos;t exist or has been removed.</p>
+          {isNetworkError ? (
+            <>
+              <p className="text-gray-500 text-sm mb-1">Unable to load project data.</p>
+              <p className="text-gray-400 text-xs mb-6 font-mono">{loadError}</p>
+            </>
+          ) : (
+            <p className="text-gray-500 text-sm mb-6">This project doesn&apos;t exist or has been removed.</p>
+          )}
           <div className="flex gap-4 justify-center">
             <button
               onClick={() => window.location.reload()}
