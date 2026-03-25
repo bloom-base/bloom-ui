@@ -350,7 +350,7 @@ export default function ProjectPage() {
         )}
 
         {/* Vision + Stats row */}
-        {(project.vision || (analytics && (analytics.tasks.total > 0 || analytics.cost.total_cost_usd > 0)) || topContributors.length > 0) && (
+        {(project.vision || (analytics && (analytics.tasks.total > 0 || (analytics.cost?.total_cost_usd ?? 0) > 0)) || topContributors.length > 0) && (
           <div className="flex flex-col lg:flex-row gap-4 mb-10">
             {project.vision && (
               <div className="flex-1 p-5 rounded-xl bg-gray-50 border border-gray-100">
@@ -369,7 +369,7 @@ export default function ProjectPage() {
                         <Image src={s.sponsor_avatar_url} alt={s.sponsor_username} width={28} height={28} className="rounded-full" />
                       ) : (
                         <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-500">
-                          {s.sponsor_username[0].toUpperCase()}
+                          {s.sponsor_username?.[0]?.toUpperCase() ?? '?'}
                         </div>
                       )}
                       <div className="text-xs">
@@ -384,7 +384,7 @@ export default function ProjectPage() {
               </div>
             )}
 
-            {analytics && (analytics.tasks.total > 0 || analytics.cost.total_cost_usd > 0) && (
+            {analytics && (analytics.tasks.total > 0 || (analytics.cost?.total_cost_usd ?? 0) > 0) && (
               <div className="grid grid-cols-2 gap-3 shrink-0">
                 <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 min-w-[100px]">
                   <p className="text-xs text-gray-400">Tasks</p>
@@ -393,7 +393,7 @@ export default function ProjectPage() {
                 <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 min-w-[100px]">
                   <p className="text-xs text-gray-400">Last Task</p>
                   <p className="text-lg font-semibold text-gray-900">
-                    {analytics.cost.last_task_cost_usd != null ? `$${analytics.cost.last_task_cost_usd.toFixed(2)}` : '-'}
+                    {analytics.cost?.last_task_cost_usd != null ? `$${analytics.cost.last_task_cost_usd.toFixed(2)}` : '-'}
                   </p>
                 </div>
                 <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 min-w-[100px]">
@@ -409,7 +409,7 @@ export default function ProjectPage() {
                 <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 min-w-[100px]">
                   <p className="text-xs text-gray-400">Total Cost</p>
                   <p className="text-lg font-semibold text-gray-900">
-                    ${analytics.cost.total_cost_usd.toFixed(2)}
+                    ${(analytics.cost?.total_cost_usd ?? 0).toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -569,7 +569,7 @@ export default function ProjectPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-gray-900 font-medium capitalize">{d.status}</span>
-                        <span className="text-xs text-gray-400 font-mono">{d.commit_sha.slice(0, 7)}</span>
+                        <span className="text-xs text-gray-400 font-mono">{d.commit_sha ? d.commit_sha.slice(0, 7) : ''}</span>
                       </div>
                       <div className="text-xs text-gray-500">{dateStr}</div>
                     </div>
