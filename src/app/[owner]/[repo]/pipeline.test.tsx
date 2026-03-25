@@ -123,6 +123,7 @@ function setupMocks(overrides: {
   const queueStatus = overrides.queueStatus ?? {
     queue_counts: {},
     current_task: null,
+    active_tasks: [],
     total_pending: 0,
   }
 
