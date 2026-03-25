@@ -15,12 +15,14 @@ import type { QueueStatus, LedgerTask, Sponsorship } from '@/lib/api'
 const baseQueueStatus: QueueStatus = {
   queue_counts: {},
   current_task: null,
+  active_tasks: [],
   total_pending: 0,
 }
 
 const workingQueueStatus: QueueStatus = {
   queue_counts: {},
-  current_task: { id: 'task-1', title: 'Add dark mode', project_id: 'proj-1' },
+  current_task: { id: 'task-1', title: 'Add dark mode', project_id: 'proj-1', started_at: null },
+  active_tasks: [{ id: 'task-1', title: 'Add dark mode', project_id: 'proj-1', started_at: null }],
   total_pending: 0,
 }
 

@@ -19,14 +19,16 @@ export interface Project {
   deploy_status: 'pending' | 'deploying' | 'deployed' | 'failed' | null
   fly_app_name: string | null
   deploy_error: string | null
+  deploy_enabled: boolean
   max_parallel_tasks: number | null
   auto_improve: boolean
+  // NOTE: backend provides this field; UI feature was intentionally reverted in af356ee — revisit when greenlit
+  github_app_connected: boolean
   created_at: string
 }
 
 export interface ActiveTasksStatus {
   active_count: number
-  stage_waiting_count: number
   queued_count: number
   max_parallel_tasks: number
   has_capacity: boolean
@@ -521,7 +523,8 @@ export function streamTaskEvents(
 
 export interface QueueStatus {
   queue_counts: Record<string, number>
-  current_task: { id: string; title: string; project_id: string } | null
+  current_task: { id: string; title: string; project_id: string; started_at: string | null } | null
+  active_tasks: Array<{ id: string; title: string; project_id: string; started_at: string | null }>
   total_pending: number
 }
 
